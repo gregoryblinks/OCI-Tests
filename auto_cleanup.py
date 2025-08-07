@@ -40,33 +40,97 @@ except subprocess.CalledProcessError as e:
     print(f"❌ ociLabMgmt.py failed: {e}")
     exit(1)
 
-# Step 4: Find regions with resources using Resource Search
+# Step 4: Find regions with active billable resources
 regions = identity.list_region_subscriptions(config["tenancy"]).data
-resource_search_client = oci.resource_search.ResourceSearchClient(config)
 found_regions = []
+
+important_resource_types = [
+    # Core compute & storage
+    "instance", "volume", "bootvolume", "bootvolumebackup", "volumebackup",
+    "instancepool",
+
+    # Network
+    "vnic", "virtualnetwork", "subnet", "routeTable", "securityList",
+    "natgateway", "internetgateway", "drg", "drgattachment",
+    "cpe", "ipsecconnection", "networksecuritygroup",
+
+    # Load balancers & bastion
+    "loadbalancer", "loadbalancerbackendset", "loadbalancerlistener",
+    "bastion",
+
+    # Database
+    "database", "autonomousdatabase", "autonomousdatabackup",
+    "dbsystem", "dbnode",
+
+    # Object storage
+    "objectbucket",
+
+    # Identity & Vault
+    "vault", "key",
+
+    # Streaming & Messaging
+    "stream", "streampool",
+
+    # Kubernetes & DevOps
+    "okecluster", "nodepool",
+    "devopsproject", "devopsrepository", "devopsbuildpipeline",
+
+    # Functions & API
+    "function", "apigateway", "apideployment",
+
+    # Analytics & Integration
+    "analyticsinstance", "integrationinstance",
+
+    # File systems
+    "filesystem", "mounttarget", "export",
+
+    # Logging, Monitoring, Events
+    "loggroup", "log", "alarm", "metric", "rule",
+
+    # NoSQL, Big Data
+    "nosqltable", "bigdatacluster",
+
+    # Misc
+    "computeimage", "bootvolumeattachment", "volumeattachment",
+    "serviceconnector"
+]
+
+
+print("\n🌍 Checking regions for active resources...")
 
 for region in regions:
     config["region"] = region.region_name
-    try:
-        result = resource_search_client.search_resources(
-            search_details=oci.resource_search.models.StructuredSearchDetails(
-                query=f"query all resources where compartmentId = '{compartment_ocid}'",
-                type="Structured"
-            ),
-            limit=1
-        ).data.items
+    resource_search_client = oci.resource_search.ResourceSearchClient(config)
+    found_in_region = False
 
-        if result:
-            print(f"✅ Resources found in {region.region_name}")
-            found_regions.append(region.region_name)
-        else:
-            print(f"❌ No resources in {region.region_name}")
-    except Exception as e:
-        print(f"⚠️ Error in {region.region_name}: {e}")
+    for rtype in important_resource_types:
+        query = f"query {rtype} resources where compartmentId = '{compartment_ocid}'"
+        try:
+            result = resource_search_client.search_resources(
+                search_details=oci.resource_search.models.StructuredSearchDetails(
+                    query=query,
+                    type="Structured"
+                ),
+                limit=5
+            ).data.items
+
+            for item in result:
+                if item.lifecycle_state not in ["TERMINATED", "DELETED", "INACTIVE"]:
+                    print(f"✅ {region.region_name}: {rtype} - {item.display_name}")
+                    found_in_region = True
+                    break
+
+        except Exception as e:
+            print(f"⚠️ Error querying {rtype} in {region.region_name}: {e}")
+
+    if found_in_region:
+        found_regions.append(region.region_name)
+    else:
+        print(f"❌ No active resources found in {region.region_name}")
 
 # Step 5: Run cleanup.py with region list
 if not found_regions:
-    print("🚫 No regions with resources found — skipping cleanup.py.")
+    print("🚫 No active regions with resources found — skipping cleanup.py.")
     exit(0)
 
 region_list = ",".join(found_regions)
