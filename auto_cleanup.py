@@ -120,7 +120,7 @@ for region in regions:
     resource_search_client = oci.resource_search.ResourceSearchClient(config)
     found_in_region = False
 
-    query = f"query all resources where compartmentId = '{compartment_ocid}' and lifecycleState != 'TERMINATED'"
+    query = f"query all resources where compartmentId = '{compartment_ocid}'"
 
     try:
         result = resource_search_client.search_resources(
