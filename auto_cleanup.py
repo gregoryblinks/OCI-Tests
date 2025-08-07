@@ -128,22 +128,23 @@ for region in regions:
                 query=query,
                 type="Structured"
             ),
-            limit=50
+            limit=100
         ).data.items
 
-        for item in result:
-            # Filter by lifecycle state here in Python
-            if item.lifecycle_state and item.lifecycle_state.upper() != "TERMINATED":
+        # Filter out TERMINATED resources here in Python
+        active_resources = [item for item in result if item.lifecycle_state and item.lifecycle_state.upper() != "TERMINATED"]
+
+        if active_resources:
+            for item in active_resources:
                 print(f"✅ {region.region_name}: {item.resource_type} - {item.display_name} ({item.lifecycle_state})")
-                found_in_region = True
+            found_regions.append(region.region_name)
+        else:
+            print(f"❌ No active (non-terminated) resources found in {region.region_name}")
 
+    except oci.exceptions.ServiceError as e:
+        print(f"⚠️ OCI Service Error in {region.region_name}: {e.code} - {e.message}")
     except Exception as e:
-        print(f"⚠️ Error querying region {region.region_name}: {e}")
-
-    if found_in_region:
-        found_regions.append(region.region_name)
-    else:
-        print(f"❌ No active resources found in {region.region_name}")
+        print(f"⚠️ Unexpected error in {region.region_name}: {e}")
 
 # Step 5: Run cleanup.py with region list
 if not found_regions:
