@@ -128,13 +128,14 @@ for region in regions:
                 query=query,
                 type="Structured"
             ),
-            limit=5
+            limit=50
         ).data.items
 
-        if result:
-            for item in result:
-                print(f"✅ {region.region_name}: {item.resource_type} - {item.display_name}")
-            found_in_region = True
+        for item in result:
+            # Filter by lifecycle state here in Python
+            if item.lifecycle_state and item.lifecycle_state.upper() != "TERMINATED":
+                print(f"✅ {region.region_name}: {item.resource_type} - {item.display_name} ({item.lifecycle_state})")
+                found_in_region = True
 
     except Exception as e:
         print(f"⚠️ Error querying region {region.region_name}: {e}")
