@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import oci
 import subprocess
 
@@ -30,7 +29,17 @@ if not compartment_ocid:
 
 print(f"🔎 Compartment OCID: {compartment_ocid}")
 
-# Step 3: Find regions with resources using Resource Search
+# Step 3: Run ociLabMgmt.py
+oci_lab_cmd = ["./ociLabMgmt.py", "--delete", "--compartment", compartment_name]
+print("\n🧹 Running ociLabMgmt cleanup:")
+print(" ".join(oci_lab_cmd))
+try:
+    subprocess.run(oci_lab_cmd, check=True)
+except subprocess.CalledProcessError as e:
+    print(f"❌ ociLabMgmt.py failed: {e}")
+    exit(1)
+
+# Step 4: Find regions with resources using Resource Search
 regions = identity.list_region_subscriptions(config["tenancy"]).data
 resource_search_client = oci.resource_search.ResourceSearchClient(config)
 found_regions = []
@@ -54,18 +63,18 @@ for region in regions:
     except Exception as e:
         print(f"⚠️ Error in {region.region_name}: {e}")
 
-# Step 4: Construct region list and run cleanup
+# Step 5: Run cleanup.py with region list
 if not found_regions:
-    print("🚫 No regions with resources found — cleanup not required.")
+    print("🚫 No regions with resources found — skipping cleanup.py.")
     exit(0)
 
 region_list = ",".join(found_regions)
 cleanup_cmd = ["./cleanup.py", "-c", compartment_name, "-r", region_list]
 
-print("\n🧹 Running cleanup with:")
+print("\n🧹 Running cleanup.py:")
 print(" ".join(cleanup_cmd))
 
 try:
     subprocess.run(cleanup_cmd, check=True)
 except subprocess.CalledProcessError as e:
-    print(f"❌ Cleanup script failed: {e}")
+    print(f"❌ cleanup.py failed: {e}")
