@@ -1,0 +1,68 @@
+import oci
+import sys
+
+# Prompt for compartment name
+compartment_name = input("Enter the compartment name: ")
+
+# Load OCI config
+config = oci.config.from_file()
+identity = oci.identity.IdentityClient(config)
+
+# Get list of compartments
+compartments = oci.pagination.list_call_get_all_results(
+    identity.list_compartments,
+    config["tenancy"],
+    compartment_id_in_subtree=True
+).data
+
+# Include root tenancy
+tenancy = identity.get_compartment(config["tenancy"]).data
+compartments.append(tenancy)
+
+# Find compartment OCID by name
+compartment_ocid = None
+for c in compartments:
+    if c.name == compartment_name and c.lifecycle_state == "ACTIVE":
+        compartment_ocid = c.id
+        break
+
+if not compartment_ocid:
+    print(f"❌ Compartment '{compartment_name}' not found or not active.")
+    sys.exit(1)
+
+print(f"🔎 Compartment OCID: {compartment_ocid}")
+
+# Get list of subscribed regions
+regions = identity.list_region_subscriptions(config["tenancy"]).data
+
+# Use Resource Search Client
+found_regions = []
+
+for region in regions:
+    region_name = region.region_name
+    print(f"🔍 Checking region: {region_name}")
+
+    config["region"] = region_name
+    resource_search = oci.resource_search.ResourceSearchClient(config)
+
+    try:
+        result = resource_search.search_resources(
+            search_details=oci.resource_search.models.StructuredSearchDetails(
+                query=f"query all resources where compartmentId = '{compartment_ocid}'",
+                type="Structured"
+            ),
+            limit=1
+        ).data.items
+
+        if result:
+            print(f"✅ Resources found in {region_name}")
+            found_regions.append(region_name)
+        else:
+            print(f"❌ No resources in {region_name}")
+    except Exception as e:
+        print(f"⚠️ Error checking {region_name}: {e}")
+
+# Summary
+print("\n✅ Regions with resources:")
+for r in found_regions:
+    print(f" - {r}")
