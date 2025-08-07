@@ -97,7 +97,7 @@ except Exception as e:
 supported_lower = {t.lower(): t for t in supported_resource_types}
 
 searchable_types = []
-for rtype in important_billable_resource_types:
+for rtype in important_billable_resources:
     rtype_lower = rtype.lower()
     if rtype_lower in supported_lower:
         searchable_types.append(supported_lower[rtype_lower])
