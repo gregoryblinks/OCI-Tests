@@ -1,0 +1,45 @@
+#!/bin/bash
+
+# Ask for compartment name
+read -p "Enter the compartment name: " COMPARTMENT_NAME
+
+# Get compartment OCID from name
+COMPARTMENT_OCID=$(oci iam compartment list --all \
+  --query "data[?\"name\"=='$COMPARTMENT_NAME' && \"lifecycle-state\"=='ACTIVE'].id | [0]" \
+  --raw-output)
+
+if [[ -z "$COMPARTMENT_OCID" ]]; then
+  echo "❌ Compartment '$COMPARTMENT_NAME' not found or not accessible."
+  exit 1
+fi
+
+echo "🔎 Compartment OCID: $COMPARTMENT_OCID"
+
+# Get list of subscribed regions
+REGIONS=$(oci iam region-subscription list --query "data[*].\"region-name\"" --raw-output)
+
+FOUND_REGIONS=""
+
+# Loop through each region to check for resources
+for REGION in $REGIONS; do
+  echo "🔍 Checking region: $REGION..."
+
+  RESULT=$(oci search resource structured-search \
+    --region "$REGION" \
+    --query-text "query all resources where compartmentId = '$COMPARTMENT_OCID'" \
+    --limit 1 \
+    --query "data.items[*].identifier" \
+    --raw-output)
+
+  if [[ -n "$RESULT" ]]; then
+    echo "✅ Resources found in $REGION"
+    FOUND_REGIONS="$FOUND_REGIONS $REGION"
+  else
+    echo "❌ No resources found in $REGION"
+  fi
+done
+
+# Final summary
+echo ""
+echo "✅ Regions with resources in compartment '$COMPARTMENT_NAME':"
+echo "$FOUND_REGIONS"
