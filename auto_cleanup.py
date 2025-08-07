@@ -46,18 +46,46 @@ regions = identity.list_region_subscriptions(config["tenancy"]).data
 found_regions = []
 
 # Define refined billable + critical infrastructure resource types
-important_billable_resource_types = {
-    "Instance", "Image", "BootVolume", "Volume", "VolumeGroup",
-    "DbSystem", "AutonomousDatabase",
-    "Vcn", "Subnet", "Drg", "InternetGateway", "NATGateway", "ServiceGateway",
-    "RouteTable", "SecurityList",
+important_billable_resources = {
+    # 🖥️ Compute & Storage
+    "Instance", "BootVolume", "Volume", "Image", "InstancePool",
+    "VolumeBackup", "BootVolumeBackup", "VolumeGroup",
+
+    # 🛢️ Database
+    "DbSystem", "AutonomousDatabase", "AutonomousDatabaseBackup",
+
+    # ⚖️ Load Balancer
     "LoadBalancer",
+
+    # 🗂️ Object / File Storage
     "Bucket", "FileSystem", "MountTarget",
+
+    # 🔄 Streaming
     "Stream", "StreamPool",
+
+    # 🔐 Vault & Security
     "Vault", "Key", "Secret",
+
+    # 🐳 Containers (OKE)
     "Cluster", "NodePool",
-    "Alarm"
+
+    # 📊 Analytics / Integration
+    "AnalyticsInstance", "IntegrationInstance",
+
+    # ⚙️ Serverless & APIs
+    "Function", "ApiGateway", "ApiDeployment",
+
+    # 📈 Monitoring / Logging
+    "Alarm", "LogGroup", "Log",
+
+    # 🌐 Networking (billable-impacting infrastructure)
+    "Vcn", "Subnet", "Drg", "InternetGateway",
+    "NATGateway", "ServiceGateway", "RouteTable", "SecurityList",
+
+    # 🔁 Automated connectors / Access
+    "ServiceConnector", "Bastion"
 }
+
 
 # Fetch supported resource types from OCI and filter
 try:
