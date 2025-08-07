@@ -3,7 +3,7 @@ import oci
 import subprocess
 
 # Step 1: Ask for compartment name
-compartment_name = input("Enter the compartment name (e.g., OCI-LAB-35): ").strip()
+compartment_name = input("Enter the compartment name (e.g., OCI-LAB-##): ").strip()
 
 # Step 2: Load OCI config and get compartment OCID
 config = oci.config.from_file()
@@ -125,25 +125,24 @@ for region in regions:
     resource_search_client = oci.resource_search.ResourceSearchClient(config)
     found_in_region = False
 
-    for rtype in searchable_types:
-        query = f"query all resources where compartmentId = '{compartment_ocid}' and resourceType = '{rtype}' and lifecycleState != 'TERMINATED'"
-        try:
-            result = resource_search_client.search_resources(
-                search_details=oci.resource_search.models.StructuredSearchDetails(
-                    query=query,
-                    type="Structured"
-                ),
-                limit=5
-            ).data.items
+    query = f"query all resources where compartmentId = '{compartment_ocid}' and lifecycleState != 'TERMINATED'"
 
+    try:
+        result = resource_search_client.search_resources(
+            search_details=oci.resource_search.models.StructuredSearchDetails(
+                query=query,
+                type="Structured"
+            ),
+            limit=5
+        ).data.items
+
+        if result:
             for item in result:
-                if item.lifecycle_state not in ["TERMINATED", "DELETED", "INACTIVE"]:
-                    print(f"✅ {region.region_name}: {rtype} - {item.display_name}")
-                    found_in_region = True
-                    break
+                print(f"✅ {region.region_name}: {item.resource_type} - {item.display_name}")
+            found_in_region = True
 
-        except Exception as e:
-            print(f"⚠️ Error querying {rtype} in {region.region_name}: {e}")
+    except Exception as e:
+        print(f"⚠️ Error querying region {region.region_name}: {e}")
 
     if found_in_region:
         found_regions.append(region.region_name)
