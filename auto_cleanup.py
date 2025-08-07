@@ -45,58 +45,21 @@ except subprocess.CalledProcessError as e:
 regions = identity.list_region_subscriptions(config["tenancy"]).data
 found_regions = []
 
-important_resource_types = [
-    # Core compute & storage
-    "instance", "volume", "bootvolume", "bootvolumebackup", "volumebackup",
-    "instancepool",
+# Define refined billable + critical infrastructure resource types
+important_billable_resource_types = {
+    "Instance", "Image", "BootVolume", "Volume", "VolumeGroup",
+    "DbSystem", "AutonomousDatabase",
+    "Vcn", "Subnet", "Drg", "InternetGateway", "NATGateway", "ServiceGateway",
+    "RouteTable", "SecurityList",
+    "LoadBalancer",
+    "Bucket", "FileSystem", "MountTarget",
+    "Stream", "StreamPool",
+    "Vault", "Key", "Secret",
+    "Cluster", "NodePool",
+    "Alarm"
+}
 
-    # Network
-    "vnic", "virtualnetwork", "subnet", "routeTable", "securityList",
-    "natgateway", "internetgateway", "drg", "drgattachment",
-    "cpe", "ipsecconnection", "networksecuritygroup",
-
-    # Load balancers & bastion
-    "loadbalancer", "loadbalancerbackendset", "loadbalancerlistener",
-    "bastion",
-
-    # Database
-    "database", "autonomousdatabase", "autonomousdatabackup",
-    "dbsystem", "dbnode",
-
-    # Object storage
-    "objectbucket",
-
-    # Identity & Vault
-    "vault", "key",
-
-    # Streaming & Messaging
-    "stream", "streampool",
-
-    # Kubernetes & DevOps
-    "okecluster", "nodepool",
-    "devopsproject", "devopsrepository", "devopsbuildpipeline",
-
-    # Functions & API
-    "function", "apigateway", "apideployment",
-
-    # Analytics & Integration
-    "analyticsinstance", "integrationinstance",
-
-    # File systems
-    "filesystem", "mounttarget", "export",
-
-    # Logging, Monitoring, Events
-    "loggroup", "log", "alarm", "metric", "rule",
-
-    # NoSQL, Big Data
-    "nosqltable", "bigdatacluster",
-
-    # Misc
-    "computeimage", "bootvolumeattachment", "volumeattachment",
-    "serviceconnector"
-]
-
-# Fetch supported resource types from OCI and filter important_resource_types accordingly
+# Fetch supported resource types from OCI and filter
 try:
     supported_resource_types = [t.name for t in resource_search_client.list_resource_types().data]
 except Exception as e:
@@ -106,45 +69,47 @@ except Exception as e:
 supported_lower = {t.lower(): t for t in supported_resource_types}
 
 searchable_types = []
-for rtype in important_resource_types:
+for rtype in important_billable_resource_types:
     rtype_lower = rtype.lower()
     if rtype_lower in supported_lower:
         searchable_types.append(supported_lower[rtype_lower])
     else:
         print(f"⚠️ Skipping unsupported resource type: {rtype}")
 
-print("\n🌍 Checking regions for active resources...")
+print("\n🌍 Checking regions for active billable resources...")
 
 for region in regions:
     config["region"] = region.region_name
     resource_search_client = oci.resource_search.ResourceSearchClient(config)
     found_in_region = False
 
-    query = f"query all resources where compartmentId = '{compartment_ocid}'"
+    for rtype in searchable_types:
+        query = f"query all resources where compartmentId = '{compartment_ocid}' and resourceType = '{rtype}' and lifecycleState != 'TERMINATED'"
 
-    try:
-        result = resource_search_client.search_resources(
-            search_details=oci.resource_search.models.StructuredSearchDetails(
-                query=query,
-                type="Structured"
-            ),
-            limit=100
-        ).data.items
+        try:
+            result = resource_search_client.search_resources(
+                search_details=oci.resource_search.models.StructuredSearchDetails(
+                    query=query,
+                    type="Structured"
+                ),
+                limit=10
+            ).data.items
 
-        # Filter out TERMINATED resources here in Python
-        active_resources = [item for item in result if item.lifecycle_state and item.lifecycle_state.upper() != "TERMINATED"]
+            for item in result:
+                if item.lifecycle_state and item.lifecycle_state.upper() != "TERMINATED":
+                    print(f"✅ {region.region_name}: {item.resource_type} - {item.display_name} ({item.lifecycle_state})")
+                    found_in_region = True
+                    break
 
-        if active_resources:
-            for item in active_resources:
-                print(f"✅ {region.region_name}: {item.resource_type} - {item.display_name} ({item.lifecycle_state})")
-            found_regions.append(region.region_name)
-        else:
-            print(f"❌ No active (non-terminated) resources found in {region.region_name}")
+        except oci.exceptions.ServiceError as e:
+            print(f"⚠️ OCI Service Error in {region.region_name} for {rtype}: {e.code} - {e.message}")
+        except Exception as e:
+            print(f"⚠️ Unexpected error in {region.region_name} for {rtype}: {e}")
 
-    except oci.exceptions.ServiceError as e:
-        print(f"⚠️ OCI Service Error in {region.region_name}: {e.code} - {e.message}")
-    except Exception as e:
-        print(f"⚠️ Unexpected error in {region.region_name}: {e}")
+    if found_in_region:
+        found_regions.append(region.region_name)
+    else:
+        print(f"❌ No active resources found in {region.region_name}")
 
 # Step 5: Run cleanup.py with region list
 if not found_regions:
