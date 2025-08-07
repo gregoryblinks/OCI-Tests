@@ -112,8 +112,7 @@ for region in regions:
     found_in_region = False
 
     for rtype in searchable_types:
-        query = f"query all resources where compartmentId = '{compartment_ocid}' and resourceType = '{rtype}' and lifecycleState != 'TERMINATED'"
-
+        query = f"query {rtype} resources where compartmentId = '{compartment_ocid}' and lifecycleState != 'TERMINATED'"
         try:
             result = resource_search_client.search_resources(
                 search_details=oci.resource_search.models.StructuredSearchDetails(
