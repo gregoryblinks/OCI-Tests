@@ -113,11 +113,6 @@ for rtype in important_resource_types:
     else:
         print(f"⚠️ Skipping unsupported resource type: {rtype}")
 
-print("\nSupported resource types from OCI:")
-supported_resource_types = [t.name for t in resource_search_client.list_resource_types().data]
-for t in supported_resource_types:
-    print(f" - {t}")
-
 print("\n🌍 Checking regions for active resources...")
 
 for region in regions:
