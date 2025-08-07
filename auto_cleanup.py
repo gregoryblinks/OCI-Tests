@@ -8,6 +8,7 @@ compartment_name = input("Enter the compartment name (e.g., OCI-LAB-35): ").stri
 # Step 2: Load OCI config and get compartment OCID
 config = oci.config.from_file()
 identity = oci.identity.IdentityClient(config)
+resource_search_client = oci.resource_search.ResourceSearchClient(config)
 
 # Get list of compartments (including root)
 compartments = oci.pagination.list_call_get_all_results(
@@ -95,6 +96,22 @@ important_resource_types = [
     "serviceconnector"
 ]
 
+# Fetch supported resource types from OCI and filter important_resource_types accordingly
+try:
+    supported_resource_types = [t.name for t in resource_search_client.list_resource_types().data]
+except Exception as e:
+    print(f"❌ Failed to fetch supported resource types: {e}")
+    exit(1)
+
+supported_lower = {t.lower(): t for t in supported_resource_types}
+
+searchable_types = []
+for rtype in important_resource_types:
+    rtype_lower = rtype.lower()
+    if rtype_lower in supported_lower:
+        searchable_types.append(supported_lower[rtype_lower])
+    else:
+        print(f"⚠️ Skipping unsupported resource type: {rtype}")
 
 print("\n🌍 Checking regions for active resources...")
 
@@ -103,7 +120,7 @@ for region in regions:
     resource_search_client = oci.resource_search.ResourceSearchClient(config)
     found_in_region = False
 
-    for rtype in important_resource_types:
+    for rtype in searchable_types:
         query = f"query all resources where compartmentId = '{compartment_ocid}' and resourceType = '{rtype}' and lifecycleState != 'TERMINATED'"
         try:
             result = resource_search_client.search_resources(
