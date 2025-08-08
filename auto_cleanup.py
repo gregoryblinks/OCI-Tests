@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import oci
 import subprocess
+import sys
 
 # === Step 1: Ask for compartment name ===
 compartment_name = input("Enter the compartment name (e.g., OCI-LAB-##): ").strip()
@@ -27,148 +28,157 @@ for c in compartments:
 
 if not compartment_ocid:
     print(f"❌ Compartment '{compartment_name}' not found or not active.")
-    exit(1)
+    sys.exit(1)
 
 print(f"🔎 Compartment OCID: {compartment_ocid}")
 
-# === Step 4: Define priority billable resources ===
+# === Step 4: Run ociLabMgmt.py (pre-clean) ===
+oci_lab_cmd = ["./ociLabMgmt.py", "--delete", "--compartment", compartment_name]
+print("\n🧹 Running ociLabMgmt cleanup:")
+print(" ".join(oci_lab_cmd))
+try:
+    subprocess.run(oci_lab_cmd, check=True)
+except subprocess.CalledProcessError as e:
+    print(f"❌ ociLabMgmt.py failed: {e}")
+    sys.exit(1)
+
+# === Step 5: Define priority billable resources (will be used in 2nd pass) ===
 important_billable_resources = {
     # Compute & Storage
     "Instance", "BootVolume", "Volume", "Image", "InstancePool",
     "VolumeBackup", "BootVolumeBackup", "VolumeGroup",
-
     # Database
     "DbSystem", "AutonomousDatabase", "AutonomousDatabaseBackup",
-
     # Load Balancer
     "LoadBalancer",
-
     # Object / File Storage
     "Bucket", "FileSystem", "MountTarget",
-
     # Streaming
     "Stream", "StreamPool",
-
     # Vault & Security
     "Vault", "Key", "Secret",
-
     # Containers
     "Cluster", "NodePool",
-
     # Analytics / Integration
     "AnalyticsInstance", "IntegrationInstance",
-
     # Serverless & APIs
     "Function", "ApiGateway", "ApiDeployment",
-
     # Monitoring / Logging
     "Alarm", "LogGroup", "Log",
-
     # Networking
     "Vcn", "Subnet", "Drg", "InternetGateway",
     "NATGateway", "ServiceGateway", "RouteTable", "SecurityList",
-
-    # Automated connectors
+    # Access / Automation
     "ServiceConnector", "Bastion"
 }
 
-# === Step 5: Build searchable types lists ===
+# Map billable types to *exact* OCI searchable names
 try:
     supported_resource_types = [t.name for t in resource_search_client.list_resource_types().data]
 except Exception as e:
     print(f"❌ Failed to fetch supported resource types: {e}")
-    exit(1)
+    sys.exit(1)
 
 supported_lower = {t.lower(): t for t in supported_resource_types}
-
-# Priority list (keep only supported ones)
-priority_types = []
-for rtype in important_billable_resources:
+billable_types = []
+for rtype in sorted(important_billable_resources):
     if rtype.lower() in supported_lower:
-        priority_types.append(supported_lower[rtype.lower()])
+        billable_types.append(supported_lower[rtype.lower()])
     else:
-        print(f"⚠️ Skipping unsupported resource type: {rtype}")
+        print(f"⚠️ Skipping unsupported (not searchable) billable type: {rtype}")
 
-# Known non-billable types to skip in fallback
-non_billable_keywords = {"compartment", "tag", "policy", "group", "user", "tenancy"}
-
-# Fallback list = all supported types not in priority list, minus non-billable
-fallback_types = [
-    rt for rt in supported_resource_types
-    if rt not in priority_types
-    and not any(nb in rt.lower() for nb in non_billable_keywords)
-]
-
-# === Step 6: Get subscribed regions ===
+# === Step 6: Region scan (searchable-first, then billable) ===
 regions = identity.list_region_subscriptions(config["tenancy"]).data
 found_regions = set()
+reason_by_region = {}  # region -> "searchable" or "billable"
 
-print("\n🌍 Checking regions for active resources with detailed debug output...")
+def is_active(item):
+    # Treat as active if lifecycle_state absent or not a terminal state
+    st = getattr(item, "lifecycle_state", None)
+    if not st:
+        return True
+    st_u = str(st).upper()
+    return st_u not in {"TERMINATED", "DELETED", "INACTIVE"}
 
+print("\n🌍 Checking regions (searchable-first, billable second)...")
 for region in regions:
-    config["region"] = region.region_name
+    region_name = region.region_name
+    config["region"] = region_name
     resource_search_client = oci.resource_search.ResourceSearchClient(config)
-    found_in_region = False
 
-    # ---- Priority search ----
-    for rtype in priority_types:
-        query = f"query {rtype} resources where compartmentId = '{compartment_ocid}' and lifecycleState != 'TERMINATED'"
+    # --- PASS 1: Searchable-first (Tenancy Explorer parity)
+    try:
+        # IMPORTANT: no lifecycle filter in query; filter in Python
+        result = resource_search_client.search_resources(
+            search_details=oci.resource_search.models.StructuredSearchDetails(
+                query=f"query all resources where compartmentId = '{compartment_ocid}'",
+                type="Structured"
+            ),
+            limit=25  # grab a few so we can debug-print
+        ).data.items
+
+        active = [it for it in result if is_active(it)]
+        if active:
+            print(f"✅ {region_name}: Found searchable resources:")
+            for it in active[:10]:
+                print(f"    • {it.resource_type} :: {it.display_name} (state={getattr(it,'lifecycle_state',None)})")
+            found_regions.add(region_name)
+            reason_by_region[region_name] = "searchable"
+            continue  # don’t run billable pass if searchable already found
+        else:
+            print(f"ℹ️ {region_name}: Searchable query returned only terminal/empty results")
+
+    except oci.exceptions.ServiceError as e:
+        print(f"⚠️ Search error in {region_name}: {e.code} - {e.message}")
+    except Exception as e:
+        print(f"⚠️ Unexpected search error in {region_name}: {e}")
+
+    # --- PASS 2: Billable types (only if PASS 1 found nothing)
+    billable_hit = False
+    for rtype in billable_types:
+        q = f"query {rtype} resources where compartmentId = '{compartment_ocid}'"
         try:
-            result = resource_search_client.search_resources(
+            items = resource_search_client.search_resources(
                 search_details=oci.resource_search.models.StructuredSearchDetails(
-                    query=query,
+                    query=q,
                     type="Structured"
                 ),
-                limit=10
+                limit=25
             ).data.items
+            active_items = [it for it in items if is_active(it)]
+            if active_items:
+                if not billable_hit:
+                    print(f"🟩 {region_name}: Found billable resources:")
+                    billable_hit = True
+                for it in active_items[:10]:
+                    print(f"    • {it.resource_type} :: {it.display_name} (state={getattr(it,'lifecycle_state',None)})")
+                # we could break here to speed up, but printing a few types helps debug
+        except oci.exceptions.ServiceError as e:
+            # Some types simply don't allow per-type queries in certain regions — ignore but print once
+            print(f"   ⚠️ {region_name}:{rtype} search error: {e.code}")
+        except Exception:
+            pass
 
-            if result:
-                print(f"✅ {region.region_name}: Found {rtype} resources:")
-                for item in result:
-                    print(f"    - {item.display_name} (State: {item.lifecycle_state})")
-                found_in_region = True
-                break  # no need to continue priority search for this region
-        except Exception as e:
-            print(f"⚠️ Error in {region.region_name} for {rtype}: {e}")
-
-    # ---- Fallback search (if nothing found in priority) ----
-    if not found_in_region:
-        for rtype in fallback_types:
-            query = f"query {rtype} resources where compartmentId = '{compartment_ocid}' and lifecycleState != 'TERMINATED'"
-            try:
-                result = resource_search_client.search_resources(
-                    search_details=oci.resource_search.models.StructuredSearchDetails(
-                        query=query,
-                        type="Structured"
-                    ),
-                    limit=10
-                ).data.items
-
-                if result:
-                    print(f"ℹ️ {region.region_name}: Found fallback {rtype} resources:")
-                    for item in result:
-                        print(f"    - {item.display_name} (State: {item.lifecycle_state})")
-                    found_in_region = True
-                    break
-            except Exception:
-                pass
-
-    if found_in_region:
-        found_regions.add(region.region_name)
+    if billable_hit:
+        found_regions.add(region_name)
+        reason_by_region[region_name] = "billable"
     else:
-        print(f"❌ No resources found in {region.region_name}")
+        print(f"❌ {region_name}: No resources found")
 
-# === Step 7: Run cleanup.py if needed ===
+# === Step 7: Show summary and run cleanup ===
 if not found_regions:
-    print("🚫 No active regions with resources found — skipping cleanup.py.")
-    exit(0)
+    print("\n🚫 No active regions with resources found — skipping cleanup.py.")
+    sys.exit(0)
+
+print("\n📋 Region summary:")
+for r in sorted(found_regions):
+    print(f" - {r} (from {reason_by_region.get(r)})")
 
 region_list = ",".join(sorted(found_regions))
 cleanup_cmd = ["./cleanup.py", "-c", compartment_name, "-r", region_list]
 
 print("\n🧹 Running cleanup.py:")
 print(" ".join(cleanup_cmd))
-
 try:
     subprocess.run(cleanup_cmd, check=True)
 except subprocess.CalledProcessError as e:
