@@ -42,7 +42,7 @@ except subprocess.CalledProcessError as e:
     print(f"❌ ociLabMgmt.py failed: {e}")
     sys.exit(1)
 
-# === Step 5: Define priority billable resources (will be used in 2nd pass) ===
+# === Step 5: Define priority billable resources (used in 2nd pass) ===
 important_billable_resources = {
     # Compute & Storage
     "Instance", "BootVolume", "Volume", "Image", "InstancePool",
@@ -72,7 +72,7 @@ important_billable_resources = {
     "ServiceConnector", "Bastion"
 }
 
-# Map billable types to *exact* OCI searchable names
+# Map billable types to *exact* OCI searchable names (silent if unsupported)
 try:
     supported_resource_types = [t.name for t in resource_search_client.list_resource_types().data]
 except Exception as e:
@@ -80,12 +80,11 @@ except Exception as e:
     sys.exit(1)
 
 supported_lower = {t.lower(): t for t in supported_resource_types}
-billable_types = []
-for rtype in sorted(important_billable_resources):
-    if rtype.lower() in supported_lower:
-        billable_types.append(supported_lower[rtype.lower()])
-    else:
-        print(f"⚠️ Skipping unsupported (not searchable) billable type: {rtype}")
+billable_types = [
+    supported_lower[rtype.lower()]
+    for rtype in sorted(important_billable_resources)
+    if rtype.lower() in supported_lower
+]
 
 # === Step 6: Region scan (searchable-first, then billable) ===
 regions = identity.list_region_subscriptions(config["tenancy"]).data
@@ -93,7 +92,7 @@ found_regions = set()
 reason_by_region = {}  # region -> "searchable" or "billable"
 
 def is_active(item):
-    # Treat as active if lifecycle_state absent or not a terminal state
+    # Treat as active if lifecycle_state absent or not terminal
     st = getattr(item, "lifecycle_state", None)
     if not st:
         return True
@@ -106,15 +105,15 @@ for region in regions:
     config["region"] = region_name
     resource_search_client = oci.resource_search.ResourceSearchClient(config)
 
-    # --- PASS 1: Searchable-first (Tenancy Explorer parity)
+    # --- PASS 1: Searchable-first (Tenancy Explorer parity) ---
     try:
-        # IMPORTANT: no lifecycle filter in query; filter in Python
+        # No lifecycle filter in query; filter in Python to avoid parse errors
         result = resource_search_client.search_resources(
             search_details=oci.resource_search.models.StructuredSearchDetails(
                 query=f"query all resources where compartmentId = '{compartment_ocid}'",
                 type="Structured"
             ),
-            limit=25  # grab a few so we can debug-print
+            limit=25
         ).data.items
 
         active = [it for it in result if is_active(it)]
@@ -133,7 +132,7 @@ for region in regions:
     except Exception as e:
         print(f"⚠️ Unexpected search error in {region_name}: {e}")
 
-    # --- PASS 2: Billable types (only if PASS 1 found nothing)
+    # --- PASS 2: Billable types (only if PASS 1 found nothing) ---
     billable_hit = False
     for rtype in billable_types:
         q = f"query {rtype} resources where compartmentId = '{compartment_ocid}'"
@@ -152,9 +151,8 @@ for region in regions:
                     billable_hit = True
                 for it in active_items[:10]:
                     print(f"    • {it.resource_type} :: {it.display_name} (state={getattr(it,'lifecycle_state',None)})")
-                # we could break here to speed up, but printing a few types helps debug
+                # Keep looping a couple of types for visibility; remove if you prefer speed
         except oci.exceptions.ServiceError as e:
-            # Some types simply don't allow per-type queries in certain regions — ignore but print once
             print(f"   ⚠️ {region_name}:{rtype} search error: {e.code}")
         except Exception:
             pass
