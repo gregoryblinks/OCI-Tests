@@ -12,3 +12,5 @@ See 'fn <command> --help' for more information. Client version: 0.6.43
 
 fn update context oci-context api-url https://functions.us-ashburn-1.oci.oraclecloud.com
 
+fn create context oci-context --provider oracle \
+  --api-url https://functions.us-ashburn-1.oci.oraclecloud.com
