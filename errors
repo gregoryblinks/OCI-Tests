@@ -37,3 +37,6 @@ Kopieren
 Bearbeiten
 oracle.region: us-ashburn-1
 oracle.compartment-id: <COMPARTMENT_OCID>
+
+fn config function cloud-guard-processing-app cloud_guard_processor BUCKET_NAME cloud-guard-findings-bucket
+
