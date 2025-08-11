@@ -10,30 +10,5 @@ Fn: open /home/opc/.fn/contexts/.yaml: no such file or directory
 See 'fn <command> --help' for more information. Client version: 0.6.43
 [opc@oci-admin-01 ~]$
 
-Current context: oci-context
+fn update context oci-context api-url https://functions.us-ashburn-1.oci.oraclecloud.com
 
-api-url: ""
-oci-context: oracle.compartment-id
-provider: oracle
-registry: ""
-
-[opc@oci-admin-01 ~]$ fn list apps
-
-MANAGEMENT COMMAND
-  fn list apps - List all created applications
-
-USAGE
-  fn [global options] list apps [command options]
-
-DESCRIPTION
-  This command provides a list of defined applications.
-
-COMMAND OPTIONS
-  --cursor value  Pagination cursor
-  -n value        Number of apps to return (default: 100)
-  --output value  Output format (json)
-
-
-Fn: no OCI compartment OCID specified in config key oracle.compartment-id
-
-See 'fn <command> --help' for more information. Client version: 0.6.43
