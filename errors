@@ -1,30 +1,33 @@
-⚠️ Skipping unsupported (not searchable) billable type: Cluster
-⚠️ Skipping unsupported (not searchable) billable type: DbSystem
-⚠️ Skipping unsupported (not searchable) billable type: Drg
-⚠️ Skipping unsupported (not searchable) billable type: FileSystem
-⚠️ Skipping unsupported (not searchable) billable type: Function
-⚠️ Skipping unsupported (not searchable) billable type: Image
-⚠️ Skipping unsupported (not searchable) billable type: Instance
-⚠️ Skipping unsupported (not searchable) billable type: InstancePool
-⚠️ Skipping unsupported (not searchable) billable type: IntegrationInstance
-⚠️ Skipping unsupported (not searchable) billable type: InternetGateway
-⚠️ Skipping unsupported (not searchable) billable type: Key
-⚠️ Skipping unsupported (not searchable) billable type: LoadBalancer
-⚠️ Skipping unsupported (not searchable) billable type: Log
-⚠️ Skipping unsupported (not searchable) billable type: LogGroup
-⚠️ Skipping unsupported (not searchable) billable type: MountTarget
-⚠️ Skipping unsupported (not searchable) billable type: NATGateway
-⚠️ Skipping unsupported (not searchable) billable type: NodePool
-⚠️ Skipping unsupported (not searchable) billable type: RouteTable
-⚠️ Skipping unsupported (not searchable) billable type: Secret
-⚠️ Skipping unsupported (not searchable) billable type: SecurityList
-⚠️ Skipping unsupported (not searchable) billable type: ServiceConnector
-⚠️ Skipping unsupported (not searchable) billable type: ServiceGateway
-⚠️ Skipping unsupported (not searchable) billable type: Stream
-⚠️ Skipping unsupported (not searchable) billable type: StreamPool
-⚠️ Skipping unsupported (not searchable) billable type: Subnet
-⚠️ Skipping unsupported (not searchable) billable type: Vault
-⚠️ Skipping unsupported (not searchable) billable type: Vcn
-⚠️ Skipping unsupported (not searchable) billable type: Volume
-⚠️ Skipping unsupported (not searchable) billable type: VolumeBackup
-⚠️ Skipping unsupported (not searchable) billable type: VolumeGroup
+gregory_oh@cloudshell:cloud_guard_processor (us-ashburn-1)$ fn -v deploy --app $APP_NAME
+Deploying cloud_guard_processor to app: cloud-guard-processing-app
+Bumped to version 0.0.2
+Using Container engine docker
+Building image cloud_guard_processor:0.0.2 
+Dockerfile content
+-----------------------------------
+FROM fnproject/python:3.9-dev as build-stage
+WORKDIR /function
+ADD requirements.txt /function/
+
+                        RUN pip3 install --target /python/  --no-cache --no-cache-dir -r requirements.txt &&\
+                            rm -fr ~/.cache/pip /tmp* requirements.txt func.yaml Dockerfile .venv &&\
+                            chmod -R o+r /python
+ADD . /function/
+RUN rm -fr /function/.pip_cache
+FROM fnproject/python:3.9
+WORKDIR /function
+COPY --from=build-stage /python /python
+COPY --from=build-stage /function /function
+RUN chmod -R o+r /function
+ENV PYTHONPATH=/function:/python
+ENTRYPOINT ["/python/bin/fdk", "/function/func.py", "handler"]
+-----------------------------------
+FN_REGISTRY:  FN_REGISTRY is not set.
+Current Context:  us-ashburn-1
+TargetedPlatform:  amd64HostPlatform:  arm64
+
+
+Fn: error running docker build: OL8 CloudShell does not support cross-compilation and multi-arch functions builds. Please ensure the architecture of your App matches the CloudShell architecture.
+
+See 'fn <command> --help' for more information. Client version: 0.6.41
+gregory_oh@cloudshell:cloud_guard_processor (us-ashburn-1)$ 
