@@ -1,2 +1,4 @@
-sudo rm -f /usr/local/bin/fn
-bash -c "$(curl -sL https://raw.githubusercontent.com/fnproject/cli/master/install)"
+fn create context oci-context --provider oracle
+fn update context oci-context oracle.region us-ashburn-1
+fn update context oci-context oracle.compartment-id <COMPARTMENT_OCID>
+fn use context oci-context
