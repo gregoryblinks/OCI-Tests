@@ -2,3 +2,10 @@ fn create context oci-context --provider oracle
 fn update context oci-context oracle.region us-ashburn-1
 fn update context oci-context oracle.compartment-id <COMPARTMENT_OCID>
 fn use context oci-context
+
+[opc@oci-admin-01 ~]$ fn update context oci-context oracle.region us-ashburn-1
+
+Fn: open /home/opc/.fn/contexts/.yaml: no such file or directory
+
+See 'fn <command> --help' for more information. Client version: 0.6.43
+[opc@oci-admin-01 ~]$
