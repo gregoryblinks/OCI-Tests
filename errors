@@ -21,3 +21,19 @@ fn create context oci-context \
   --oracle.region us-ashburn-1 \
   --oracle.compartment-id ocid1.compartment.oc1..aaaaaaaal3ny7cdvz3ovgcq43x7vqexyyy4s2fozfo4zhked7xsyzbhsx7bq
 
+Option 2 — Create + Edit YAML
+bash
+Kopieren
+Bearbeiten
+fn create context oci-context \
+  --provider oracle \
+  --api-url https://functions.us-ashburn-1.oci.oraclecloud.com
+
+nano ~/.fn/contexts/oci-context.yaml
+Then manually add:
+
+yaml
+Kopieren
+Bearbeiten
+oracle.region: us-ashburn-1
+oracle.compartment-id: <COMPARTMENT_OCID>
