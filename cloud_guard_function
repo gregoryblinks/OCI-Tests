@@ -6,22 +6,17 @@ import os
 
 def handler(ctx, data: io.BytesIO = None):
     try:
-        # Load event data from Notification
         event = json.loads(data.getvalue())
         print("Event received:", json.dumps(event, indent=2))
 
-        # Extract relevant fields
         finding_id = event.get("id", "unknown_finding")
         timestamp = datetime.datetime.utcnow().isoformat()
 
-        # Prepare Object Storage client
         signer = oci.auth.signers.get_resource_principals_signer()
         object_storage = oci.object_storage.ObjectStorageClient(config={}, signer=signer)
-
         namespace = object_storage.get_namespace().data
-        bucket_name = os.getenv("BUCKET_NAME")  # Set in function config
+        bucket_name = os.getenv("BUCKET_NAME")
 
-        # Save JSON to Object Storage
         object_name = f"{timestamp}_{finding_id}.json"
         object_storage.put_object(
             namespace,
@@ -31,9 +26,9 @@ def handler(ctx, data: io.BytesIO = None):
         )
 
         print(f"Saved finding {finding_id} to bucket {bucket_name} as {object_name}")
-
         return "Success"
 
     except Exception as e:
         print("Error processing event:", str(e))
         raise
+
