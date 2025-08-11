@@ -1,6 +1,2 @@
-[opc@oci-admin-01 ~]$ fn update context oci-context oracle.region us-ashburn-1
-
-Fn: open /home/opc/.fn/contexts/.yaml: no such file or directory
-
-See 'fn <command> --help' for more information. Client version: 0.5.92
-
+sudo rm -f /usr/local/bin/fn
+bash -c "$(curl -sL https://raw.githubusercontent.com/fnproject/cli/master/install)"
