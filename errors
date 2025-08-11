@@ -14,3 +14,10 @@ fn update context oci-context api-url https://functions.us-ashburn-1.oci.oraclec
 
 fn create context oci-context --provider oracle \
   --api-url https://functions.us-ashburn-1.oci.oraclecloud.com
+
+fn create context oci-context \
+  --provider oracle \
+  --api-url https://functions.us-ashburn-1.oci.oraclecloud.com \
+  --oracle.region us-ashburn-1 \
+  --oracle.compartment-id <COMPARTMENT_OCID>
+
