@@ -1,1 +1,2 @@
-Fn: open /home/opc/.fn/contexts/.yaml: no such file or directory
+Fn: Get http://localhost:8080/v2/apps: dial tcp 127.0.0.1:8080: connect: connection refused
+
