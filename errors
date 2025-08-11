@@ -62,4 +62,4 @@ Fn: error running docker push: exit status 1
 See 'fn <command> --help' for more information. Client version: 0.6.43
 [opc@oci-admin-01 cloud_guard_processor]$
 
-echo <AUTH_TOKEN> | docker login <region-code>.ocir.io --username "<TENANCY_NAMESPACE>/<OCI_USERNAME>" --password-stdin
+echo aVJ:::507>qH]WYc)2vD | docker login iad.ocir.io --username "acscloudengineering/gregory.ohwerhi@oracle.com" --password-stdin
