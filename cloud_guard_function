@@ -25,7 +25,22 @@ def handler(ctx, data: io.BytesIO = None):
         object_storage = oci.object_storage.ObjectStorageClient(config={}, signer=signer)
         namespace = object_storage.get_namespace().data
 
-        # Save object
+        # ---- NEW: Check if bucket exists in compartment ----
+        compartment_id = os.getenv("COMPARTMENT_OCID")  # Set this in function config
+        if not compartment_id:
+            raise ValueError("COMPARTMENT_OCID environment variable not set")
+
+        buckets = object_storage.list_buckets(namespace, compartment_id).data
+        bucket_names = [b.name for b in buckets]
+        logging.getLogger().info("Namespace: %s", namespace)
+        logging.getLogger().info("Buckets in compartment: %s", bucket_names)
+
+        if bucket_name not in bucket_names:
+            msg = f"Bucket {bucket_name} NOT found in compartment {compartment_id}"
+            logging.getLogger().error(msg)
+            return msg
+
+        # ---- If bucket exists, proceed with save ----
         object_name = f"{timestamp}_{finding_id}.json"
         object_storage.put_object(
             namespace,
@@ -41,4 +56,3 @@ def handler(ctx, data: io.BytesIO = None):
     except Exception as e:
         logging.getLogger().error("Error processing event: %s", str(e))
         return f"Error: {str(e)}"
-
