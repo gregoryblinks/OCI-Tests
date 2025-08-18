@@ -71,3 +71,5 @@ tZ[-RP#I#TOieRz79SmC
 echo "tZ[-RP#I#TOieRz79SmC" | docker login iad.ocir.io  \
 --username "acscloudengineering/gregory.ohwerhi@oracle.com" \
 --password-stdin
+
+echo "tZ[-RP#I#TOieRz79SmC" | docker login iad.ocir.io  --username "acscloudengineering/oracleidentitycloudservice/gregory.ohwerhi@oracle.com" --password-stdin
