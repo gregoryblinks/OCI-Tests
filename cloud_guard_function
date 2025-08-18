@@ -3,20 +3,29 @@ import json
 import oci
 import datetime
 import os
+import logging
 
 def handler(ctx, data: io.BytesIO = None):
     try:
-        event = json.loads(data.getvalue())
-        print("Event received:", json.dumps(event, indent=2))
+        # Decode safely
+        raw_body = data.getvalue().decode("utf-8") if data else "{}"
+        event = json.loads(raw_body) if raw_body else {}
+        logging.getLogger().info("Event received: %s", event)
 
         finding_id = event.get("id", "unknown_finding")
-        timestamp = datetime.datetime.utcnow().isoformat()
+        timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H-%M-%SZ")
 
+        # Ensure bucket name is set
+        bucket_name = os.getenv("BUCKET_NAME")
+        if not bucket_name:
+            raise ValueError("BUCKET_NAME environment variable not set")
+
+        # Use resource principal signer
         signer = oci.auth.signers.get_resource_principals_signer()
         object_storage = oci.object_storage.ObjectStorageClient(config={}, signer=signer)
         namespace = object_storage.get_namespace().data
-        bucket_name = os.getenv("BUCKET_NAME")
 
+        # Save object
         object_name = f"{timestamp}_{finding_id}.json"
         object_storage.put_object(
             namespace,
@@ -25,10 +34,11 @@ def handler(ctx, data: io.BytesIO = None):
             json.dumps(event, indent=2)
         )
 
-        print(f"Saved finding {finding_id} to bucket {bucket_name} as {object_name}")
-        return "Success"
+        msg = f"Saved finding {finding_id} to bucket {bucket_name} as {object_name}"
+        logging.getLogger().info(msg)
+        return msg
 
     except Exception as e:
-        print("Error processing event:", str(e))
-        raise
+        logging.getLogger().error("Error processing event: %s", str(e))
+        return f"Error: {str(e)}"
 
