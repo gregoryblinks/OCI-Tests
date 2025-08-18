@@ -41,6 +41,8 @@ oracle.compartment-id: <COMPARTMENT_OCID>
 fn config function cloud-guard-processing-app cloud_guard_processor BUCKET_NAME cloud-guard-findings-bucket
 
 Successfully created function: cloud_guard_processor with iad.ocir.io/acscloudengineering/cloud-guard-functions/cloud_guard_processor:0.0.4
+[opc@oci-admin-01 cloud_guard_processor]$ fn invoke cloud-guard-processing-app cloud_guard_processor
+Error invoking function. status: 502 message: function failed
 
 echo "_L>Dr8F-m8_]YrN>TaF8" | docker login iad.ocir.io  \
 --username "acscloudengineering/gregory.ohwerhi@oracle.com" \
