@@ -40,27 +40,7 @@ oracle.compartment-id: <COMPARTMENT_OCID>
 
 fn config function cloud-guard-processing-app cloud_guard_processor BUCKET_NAME cloud-guard-findings-bucket
 
-Step 13/13 : ENTRYPOINT ["/python/bin/fdk", "/function/func.py", "handler"]
- ---> Running in 6e772e9ef218
-Removing intermediate container 6e772e9ef218
- ---> 51058a200642
-Successfully built 51058a200642
-Successfully tagged cloud_guard_processor:0.0.2
-
-Using Container engine  docker  to push
-Pushing cloud_guard_processor:0.0.2 to docker registry...The push refers to repository [docker.io/library/cloud_guard_processor]
-c5de33923aa8: Preparing
-ea87d7300d2e: Preparing
-c7baef2f8d05: Preparing
-5ff364557dab: Preparing
-334e924574ef: Preparing
-1c49029f43a1: Waiting
-denied: requested access to the resource is denied
-
-Fn: error running docker push: exit status 1
-
-See 'fn <command> --help' for more information. Client version: 0.6.43
-[opc@oci-admin-01 cloud_guard_processor]$
+Successfully created function: cloud_guard_processor with iad.ocir.io/acscloudengineering/cloud-guard-functions/cloud_guard_processor:0.0.4
 
 echo "_L>Dr8F-m8_]YrN>TaF8" | docker login iad.ocir.io  \
 --username "acscloudengineering/gregory.ohwerhi@oracle.com" \
