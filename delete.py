@@ -367,6 +367,28 @@ if confirm == "yes":
        # DeleteAny(config, signer, processCompartments, "ai_anomaly_detection.AnomalyDetectionClient", "model")
        # DeleteAny(config, signer, processCompartments, "ai_anomaly_detection.AnomalyDetectionClient", "project")
 
+        print_header("Deleting AI Language at " + CurrentTimeString() + "@ " + region, 1)
+        DeleteAny(config, signer, processCompartments, "ai_language.AIServiceLanguageClient", "endpoint")
+        DeleteAny(config, signer, processCompartments, "ai_language.AIServiceLanguageClient", "model")
+        DeleteAny(config, signer, processCompartments, "ai_language.AIServiceLanguageClient", "project")
+
+        print_header("Deleting AI Vision at " + CurrentTimeString() + "@ " + region, 1)
+        DeleteAny(config, signer, processCompartments, "ai_vision.AIServiceVisionClient", "private_endpoint")
+        DeleteAny(config, signer, processCompartments, "ai_vision.AIServiceVisionClient", "model")
+        DeleteAny(config, signer, processCompartments, "ai_vision.AIServiceVisionClient", "project")
+
+        print_header("Deleting AI Speech at " + CurrentTimeString() + "@ " + region, 1)
+        DeleteAny(config, signer, processCompartments, "ai_speech.AIServiceSpeechClient", "transcription_job")
+        DeleteAny(config, signer, processCompartments, "ai_speech.AIServiceSpeechClient", "custom_model")
+
+        print_header("Deleting Generative AI Endpoints at " + CurrentTimeString() + "@ " + region, 1)
+        DeleteAny(config, signer, processCompartments, "generative_ai.GenerativeAiClient", "endpoint")
+
+        print_header("Deleting Data Labeling Service at " + CurrentTimeString() + "@ " + region, 1)
+        DeleteAny(config, signer, processCompartments, "data_labeling_service.DataLabelingManagementClient", "dataset")
+        DeleteAny(config, signer, processCompartments, "data_labeling_service_dataplane.DataLabelingClient", "record")
+        # AI resources above
+        
         print_header("Deleting Data Flow Services at " + CurrentTimeString() + "@ " + region, 1)
         DeleteAny(config, signer, processCompartments, "data_flow.DataFlowClient", "private_endpoint")
         DeleteAny(config, signer, processCompartments, "data_flow.DataFlowClient", "application")
