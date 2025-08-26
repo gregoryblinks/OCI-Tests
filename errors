@@ -63,3 +63,13 @@ echo "tZ[-RP#I#TOieRz79SmC" | docker login iad.ocir.io  --username "acscloudengi
 
 [opc@oci-admin-01 cloud_guard_processor]$ echo '{"finding":"test"}' | fn invoke cloud-guard-processing-app cloud_guard_processor
 Error: {'target_service': 'object_storage', 'status': 404, 'code': 'BucketNotFound', 'opc-request-id': 'iad-1:2Kats6lJBJf6Wj0gTxrwpo-dXoP0epgmfsbFx-xilfZaUskGPuks689lbQudxNs8', 'message': "Either the bucket named 'cloud-guard-findings-bucket' does not exist in the namespace 'acscloudengineering' or you are not authorized to access it", 'operation_name': 'put_object', 'timestamp': '2025-08-18T09:15:41.614311+00:00', 'client_version': 'Oracle-PythonSDK/2.158.0', 'request_endpoint': 'PUT https://objectstorage.us-ashburn-1.oraclecloud.com/n/acscloudengineering/b/cloud-guard-findings-bucket/o/2025-08-18T09-15-41Z_unknown_finding.json', 'logging_tips': 'To get more info on the failing request, refer to https://docs.oracle.com/en-us/iaas/tools/python/latest/logging.html for ways to log the request/response details.', 'troubleshooting_tips': "See https://docs.oracle.com/iaas/Content/API/References/apierrors.htm#apierrors_404__404_bucketnotfound for more information about resolving this error. Also see https://docs.oracle.com/iaas/api/#/en/objectstorage/20160918/Object/PutObject for details on this operation's requirements. If you are unable to resolve this object_storage issue, please contact Oracle support and provide them this full error message."}
+
+
+
+Using Container engine  docker  to push
+Pushing iad.ocir.oi/acscloudengineering/cloud-guard-functions/cloud_guard_processor:0.0.11 to docker registry...The push refers to repository [iad.ocir.oi/acscloudengineering/cloud-guard-functions/cloud_guard_processor]
+Get "https://iad.ocir.oi/v2/": dial tcp: lookup iad.ocir.oi on 169.254.169.254:53: no such host
+
+Fn: error running docker push: exit status 1
+
+See 'fn <command> --help' for more information. Client version: 0.6.43
