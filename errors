@@ -66,7 +66,17 @@ Error: {'target_service': 'object_storage', 'status': 404, 'code': 'BucketNotFou
 
 
 
-[opc@oci-admin-01 cloud_guard_processor]$ fn list functions cloud-guard-processing-app
-NAME                    IMAGE                                                                                   ID
-cloud_guard_processor   iad.ocir.io/acscloudengineering/cloud-guard-functions/cloud_guard_processor:0.0.8       ocid1.fnfunc.oc1.iad.aaaaaaaaanek6owb3wzp6yiljtyp3fnmtgj6ywghigm524hpxb6s3fyjqvhq
+Successfully built ad1c1af83691
+Successfully tagged iad.ocir.io/acscloudengineering/cloud-guard-functions/cloud_guard_processor:0.0.12
+
+Using Container engine  docker  to push
+Pushing iad.ocir.io/acscloudengineering/cloud-guard-functions/cloud_guard_processor:0.0.12 to docker registry...The push refers to repository [iad.ocir.io/acscloudengineering/cloud-guard-functions/cloud_guard_processor]
+5fa0aa6ff7f3: Pushed
+ed20d7b7cbde: Pushed
+cdc799981c2d: Layer already exists
+f64de90fd92b: Layer already exists
+334e924574ef: Layer already exists
+1c49029f43a1: Layer already exists
+0.0.12: digest: sha256:547686e011be2721a6d9c6d7ec84cf6ac9d3ff8531b2b2b885056f1c60006433 size: 1574
+Updating function cloud_guard_processor using image iad.ocir.io/acscloudengineering/cloud-guard-functions/cloud_guard_processor:0.0.12...
 [opc@oci-admin-01 cloud_guard_processor]$
