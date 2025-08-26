@@ -66,10 +66,7 @@ Error: {'target_service': 'object_storage', 'status': 404, 'code': 'BucketNotFou
 
 
 
-Using Container engine  docker  to push
-Pushing iad.ocir.oi/acscloudengineering/cloud-guard-functions/cloud_guard_processor:0.0.11 to docker registry...The push refers to repository [iad.ocir.oi/acscloudengineering/cloud-guard-functions/cloud_guard_processor]
-Get "https://iad.ocir.oi/v2/": dial tcp: lookup iad.ocir.oi on 169.254.169.254:53: no such host
-
-Fn: error running docker push: exit status 1
-
-See 'fn <command> --help' for more information. Client version: 0.6.43
+[opc@oci-admin-01 cloud_guard_processor]$ fn list functions cloud-guard-processing-app
+NAME                    IMAGE                                                                                   ID
+cloud_guard_processor   iad.ocir.io/acscloudengineering/cloud-guard-functions/cloud_guard_processor:0.0.8       ocid1.fnfunc.oc1.iad.aaaaaaaaanek6owb3wzp6yiljtyp3fnmtgj6ywghigm524hpxb6s3fyjqvhq
+[opc@oci-admin-01 cloud_guard_processor]$
