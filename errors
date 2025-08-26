@@ -69,90 +69,30 @@ Error: {'target_service': 'object_storage', 'status': 404, 'code': 'BucketNotFou
 echo '{"id":"finding-test","severity":"HIGH"}' | fn invoke cloud-guard-processing-app cloud_guard_processor
 
 {
-    "parsedData": {
-        "datetime": 1756196275227,
-        "logContent": {
-            "data": {
-                "applicationId": "ocid1.fnapp.oc1.iad.aaaaaaaarkxww5zfglqxdkhdttctsums7rzdkbzxxkm67chbqob3xlmlev3a",
-                "containerId": "n/a",
-                "functionId": "ocid1.fnfunc.oc1.iad.aaaaaaaaanek6owb3wzp6yiljtyp3fnmtgj6ywghigm524hpxb6s3fyjqvhq",
-                "message": "Served function invocation request in 0.024 seconds with error code 502 - FunctionInvokeExecutionFailed (502): function failed ",
-                "opcRequestId": "/01K3JQ90ZH00000000003GZQRV/01K3JQ90ZH00000000003GZQRW",
-                "requestId": "/01K3JQ90ZH00000000003GZQRV/01K3JQ90ZH00000000003GZQRW",
-                "src": "stdout"
-            },
-            "id": "7f2b8464-b000-4df8-ae6a-4a3b928ca178",
-            "oracle": {
-                "compartmentid": "ocid1.compartment.oc1..aaaaaaaal3ny7cdvz3ovgcq43x7vqexyyy4s2fozfo4zhked7xsyzbhsx7bq",
-                "ingestedtime": "2025-08-26T08:17:57.061Z",
-                "loggroupid": "ocid1.loggroup.oc1.iad.amaaaaaa3vux2giawc2yzxo5rqacetrng47qkupddp4gt6ccp5mbvocfrhha",
-                "logid": "ocid1.log.oc1.iad.amaaaaaa3vux2gia6qcaipq52e2klhlemmdwadhxffomcgdfcxwt3whchknq",
-                "tenantid": "ocid1.tenancy.oc1..aaaaaaaaabc4esylkbw3jkbquuluuq4iftuuwnfc2yg2fguo4s7j43exv6pq"
-            },
-            "source": "cloud-guard-processing-app",
-            "specversion": "1.0",
-            "subject": "cloud_guard_processor",
-            "time": "2025-08-26T08:17:55.227Z",
-            "type": "com.oraclecloud.functions.application.functioninvoke"
-        }
+  "datetime": 1756197808283,
+  "logContent": {
+    "data": {
+      "applicationId": "ocid1.fnapp.oc1.iad.aaaaaaaarkxww5zfglqxdkhdttctsums7rzdkbzxxkm67chbqob3xlmlev3a",
+      "containerId": "n/a",
+      "functionId": "ocid1.fnfunc.oc1.iad.aaaaaaaaanek6owb3wzp6yiljtyp3fnmtgj6ywghigm524hpxb6s3fyjqvhq",
+      "message": "Served function invocation request in 36.298 seconds with error code 502 - FunctionInvokeExecutionFailed (502): function failed ",
+      "opcRequestId": "/01K3JRPPNW00000000003H6N8M/01K3JRPPNW00000000003H6N8N",
+      "requestId": "/01K3JRPPNW00000000003H6N8M/01K3JRPPNW00000000003H6N8N",
+      "src": "stdout"
     },
-    "originalData": {
-        "datetime": 1756196275227,
-        "logContent": {
-            "data": {
-                "applicationId": "ocid1.fnapp.oc1.iad.aaaaaaaarkxww5zfglqxdkhdttctsums7rzdkbzxxkm67chbqob3xlmlev3a",
-                "containerId": "n/a",
-                "functionId": "ocid1.fnfunc.oc1.iad.aaaaaaaaanek6owb3wzp6yiljtyp3fnmtgj6ywghigm524hpxb6s3fyjqvhq",
-                "message": "Served function invocation request in 0.024 seconds with error code 502 - FunctionInvokeExecutionFailed (502): function failed ",
-                "opcRequestId": "/01K3JQ90ZH00000000003GZQRV/01K3JQ90ZH00000000003GZQRW",
-                "requestId": "/01K3JQ90ZH00000000003GZQRV/01K3JQ90ZH00000000003GZQRW",
-                "src": "stdout"
-            },
-            "id": "7f2b8464-b000-4df8-ae6a-4a3b928ca178",
-            "oracle": {
-                "compartmentid": "ocid1.compartment.oc1..aaaaaaaal3ny7cdvz3ovgcq43x7vqexyyy4s2fozfo4zhked7xsyzbhsx7bq",
-                "ingestedtime": "2025-08-26T08:17:57.061Z",
-                "loggroupid": "ocid1.loggroup.oc1.iad.amaaaaaa3vux2giawc2yzxo5rqacetrng47qkupddp4gt6ccp5mbvocfrhha",
-                "logid": "ocid1.log.oc1.iad.amaaaaaa3vux2gia6qcaipq52e2klhlemmdwadhxffomcgdfcxwt3whchknq",
-                "tenantid": "ocid1.tenancy.oc1..aaaaaaaaabc4esylkbw3jkbquuluuq4iftuuwnfc2yg2fguo4s7j43exv6pq"
-            },
-            "source": "cloud-guard-processing-app",
-            "specversion": "1.0",
-            "subject": "cloud_guard_processor",
-            "time": "2025-08-26T08:17:55.227Z",
-            "type": "com.oraclecloud.functions.application.functioninvoke"
-        }
+    "id": "9e71362a-712f-430a-9330-6e94541d0a77",
+    "oracle": {
+      "compartmentid": "ocid1.compartment.oc1..aaaaaaaal3ny7cdvz3ovgcq43x7vqexyyy4s2fozfo4zhked7xsyzbhsx7bq",
+      "ingestedtime": "2025-08-26T08:43:30.026Z",
+      "loggroupid": "ocid1.loggroup.oc1.iad.amaaaaaa3vux2giawc2yzxo5rqacetrng47qkupddp4gt6ccp5mbvocfrhha",
+      "logid": "ocid1.log.oc1.iad.amaaaaaa3vux2gia6qcaipq52e2klhlemmdwadhxffomcgdfcxwt3whchknq",
+      "tenantid": "ocid1.tenancy.oc1..aaaaaaaaabc4esylkbw3jkbquuluuq4iftuuwnfc2yg2fguo4s7j43exv6pq"
     },
-    "index": 0,
-    "datetime": "Aug 26, 2025, 08:17:55 UTC",
-    "message": "Served function invocation request in 0.024 seconds with error code 502 - FunctionInvokeExecutionFailed (502): function failed ",
-    "type": "functions.application.functioninvoke",
-    "raw": "{\"datetime\":1756196275227,\"logContent\":{\"data\":{\"applicationId\":\"ocid1.fnapp.oc1.iad.aaaaaaaarkxww5zfglqxdkhdttctsums7rzdkbzxxkm67chbqob3xlmlev3a\",\"containerId\":\"n/a\",\"functionId\":\"ocid1.fnfunc.oc1.iad.aaaaaaaaanek6owb3wzp6yiljtyp3fnmtgj6ywghigm524hpxb6s3fyjqvhq\",\"message\":\"Served function invocation request in 0.024 seconds with error code 502 - FunctionInvokeExecutionFailed (502): function failed \",\"opcRequestId\":\"/01K3JQ90ZH00000000003GZQRV/01K3JQ90ZH00000000003GZQRW\",\"requestId\":\"/01K3JQ90ZH00000000003GZQRV/01K3JQ90ZH00000000003GZQRW\",\"src\":\"stdout\"},\"id\":\"7f2b8464-b000-4df8-ae6a-4a3b928ca178\",\"oracle\":{\"compartmentid\":\"ocid1.compartment.oc1..aaaaaaaal3ny7cdvz3ovgcq43x7vqexyyy4s2fozfo4zhked7xsyzbhsx7bq\",\"ingestedtime\":\"2025-08-26T08:17:57.061Z\",\"loggroupid\":\"ocid1.loggroup.oc1.iad.amaaaaaa3vux2giawc2yzxo5rqacetrng47qkupddp4gt6ccp5mbvocfrhha\",\"logid\":\"ocid1.log.oc1.iad.amaaaaaa3vux2gia6qcaipq52e2klhlemmdwadhxffomcgdfcxwt3whchknq\",\"tenantid\":\"ocid1.tenancy.oc1..aaaaaaaaabc4esylkbw3jkbquuluuq4iftuuwnfc2yg2fguo4s7j43exv6pq\"},\"source\":\"cloud-guard-processing-app\",\"specversion\":\"1.0\",\"subject\":\"cloud_guard_processor\",\"time\":\"2025-08-26T08:17:55.227Z\",\"type\":\"com.oraclecloud.functions.application.functioninvoke\"}}",
-    "rowContent": {
-        "datetime": 1756196275227,
-        "logContent": {
-            "data": {
-                "applicationId": "ocid1.fnapp.oc1.iad.aaaaaaaarkxww5zfglqxdkhdttctsums7rzdkbzxxkm67chbqob3xlmlev3a",
-                "containerId": "n/a",
-                "functionId": "ocid1.fnfunc.oc1.iad.aaaaaaaaanek6owb3wzp6yiljtyp3fnmtgj6ywghigm524hpxb6s3fyjqvhq",
-                "message": "Served function invocation request in 0.024 seconds with error code 502 - FunctionInvokeExecutionFailed (502): function failed ",
-                "opcRequestId": "/01K3JQ90ZH00000000003GZQRV/01K3JQ90ZH00000000003GZQRW",
-                "requestId": "/01K3JQ90ZH00000000003GZQRV/01K3JQ90ZH00000000003GZQRW",
-                "src": "stdout"
-            },
-            "id": "7f2b8464-b000-4df8-ae6a-4a3b928ca178",
-            "oracle": {
-                "compartmentid": "ocid1.compartment.oc1..aaaaaaaal3ny7cdvz3ovgcq43x7vqexyyy4s2fozfo4zhked7xsyzbhsx7bq",
-                "ingestedtime": "2025-08-26T08:17:57.061Z",
-                "loggroupid": "ocid1.loggroup.oc1.iad.amaaaaaa3vux2giawc2yzxo5rqacetrng47qkupddp4gt6ccp5mbvocfrhha",
-                "logid": "ocid1.log.oc1.iad.amaaaaaa3vux2gia6qcaipq52e2klhlemmdwadhxffomcgdfcxwt3whchknq",
-                "tenantid": "ocid1.tenancy.oc1..aaaaaaaaabc4esylkbw3jkbquuluuq4iftuuwnfc2yg2fguo4s7j43exv6pq"
-            },
-            "source": "cloud-guard-processing-app",
-            "specversion": "1.0",
-            "subject": "cloud_guard_processor",
-            "time": "2025-08-26T08:17:55.227Z",
-            "type": "com.oraclecloud.functions.application.functioninvoke"
-        }
-    }
+    "source": "cloud-guard-processing-app",
+    "specversion": "1.0",
+    "subject": "cloud_guard_processor",
+    "time": "2025-08-26T08:43:28.283Z",
+    "type": "com.oraclecloud.functions.application.functioninvoke"
+  },
+  "regionId": "us-ashburn-1"
 }
