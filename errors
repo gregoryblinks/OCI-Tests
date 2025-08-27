@@ -68,31 +68,22 @@ Error: {'target_service': 'object_storage', 'status': 404, 'code': 'BucketNotFou
 
 echo '{"id":"finding-test","severity":"HIGH"}' | fn invoke cloud-guard-processing-app cloud_guard_processor
 
-{
-  "datetime": 1756197808283,
-  "logContent": {
-    "data": {
-      "applicationId": "ocid1.fnapp.oc1.iad.aaaaaaaarkxww5zfglqxdkhdttctsums7rzdkbzxxkm67chbqob3xlmlev3a",
-      "containerId": "n/a",
-      "functionId": "ocid1.fnfunc.oc1.iad.aaaaaaaaanek6owb3wzp6yiljtyp3fnmtgj6ywghigm524hpxb6s3fyjqvhq",
-      "message": "Served function invocation request in 36.298 seconds with error code 502 - FunctionInvokeExecutionFailed (502): function failed ",
-      "opcRequestId": "/01K3JRPPNW00000000003H6N8M/01K3JRPPNW00000000003H6N8N",
-      "requestId": "/01K3JRPPNW00000000003H6N8M/01K3JRPPNW00000000003H6N8N",
-      "src": "stdout"
-    },
-    "id": "9e71362a-712f-430a-9330-6e94541d0a77",
-    "oracle": {
-      "compartmentid": "ocid1.compartment.oc1..aaaaaaaal3ny7cdvz3ovgcq43x7vqexyyy4s2fozfo4zhked7xsyzbhsx7bq",
-      "ingestedtime": "2025-08-26T08:43:30.026Z",
-      "loggroupid": "ocid1.loggroup.oc1.iad.amaaaaaa3vux2giawc2yzxo5rqacetrng47qkupddp4gt6ccp5mbvocfrhha",
-      "logid": "ocid1.log.oc1.iad.amaaaaaa3vux2gia6qcaipq52e2klhlemmdwadhxffomcgdfcxwt3whchknq",
-      "tenantid": "ocid1.tenancy.oc1..aaaaaaaaabc4esylkbw3jkbquuluuq4iftuuwnfc2yg2fguo4s7j43exv6pq"
-    },
-    "source": "cloud-guard-processing-app",
-    "specversion": "1.0",
-    "subject": "cloud_guard_processor",
-    "time": "2025-08-26T08:43:28.283Z",
-    "type": "com.oraclecloud.functions.application.functioninvoke"
-  },
-  "regionId": "us-ashburn-1"
-}
+[opc@oci-admin-01 cloud_guard_processor]$ echo '{"id":"finding-test"}' |DEBUG=1 fn invoke cloud-guard-processing-app cloud_guard_processor
+POST /20181201/functions/ocid1.fnfunc.oc1.iad.aaaaaaaaanek6owb3wzp6yiljtyp3fnmtgj6ywghigm524hpxb6s3fyjqvhq/actions/invoke HTTP/1.1
+Host: ob3xlmlev3a.us-ashburn-1.functions.oci.oraclecloud.com
+User-Agent: Go-http-client/1.1
+Content-Length: 22
+Content-Type: text/plain
+Accept-Encoding: gzip
+
+{"id":"finding-test"}
+
+HTTP/1.1 502 Bad Gateway
+Content-Length: 68
+Content-Type: application/json
+Date: Wed, 27 Aug 2025 07:25:55 GMT
+Fn-Call-Id: 01K3N6PGVN1BT1358ZJ0002QEJ
+Opc-Request-Id: /01K3N6PGSM0000000000005CCV/01K3N6PGSM0000000000005CCW
+
+{"code":"FunctionInvokeExecutionFailed","message":"function failed"}
+Error invoking function. status: 502 message: function failed
