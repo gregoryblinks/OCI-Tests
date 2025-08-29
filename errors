@@ -164,78 +164,39 @@ Error: {'target_service': 'object_storage', 'status': 404, 'code': 'NamespaceNot
 "01K3NKK3M41BT1460ZJ000JMEN - root - INFO - Event received: {'id': 'finding-test'}"
 
 
-Traceback (most recent call last):
-  File "/home/opc/python/lib/python3.7/site-packages/oci/_vendor/urllib3/connection.py", line 180, in _new_conn
-    (self._dns_host, self.port), self.timeout, **extra_kw
-  File "/home/opc/python/lib/python3.7/site-packages/oci/_vendor/urllib3/util/connection.py", line 77, in create_connection
-    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
-  File "/home/opc/python/lib/python3.7/socket.py", line 748, in getaddrinfo
-    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
-socket.gaierror: [Errno -2] Name or service not known
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "/home/opc/python/lib/python3.7/site-packages/oci/_vendor/urllib3/connectionpool.py", line 728, in urlopen
-    chunked=chunked,
-  File "/home/opc/python/lib/python3.7/site-packages/oci/_vendor/urllib3/connectionpool.py", line 409, in _make_request
-    self._validate_conn(conn)
-  File "/home/opc/python/lib/python3.7/site-packages/oci/_vendor/urllib3/connectionpool.py", line 1066, in _validate_conn
-    conn.connect()
-  File "/home/opc/python/lib/python3.7/site-packages/oci/_vendor/urllib3/connection.py", line 368, in connect
-    self.sock = conn = self._new_conn()
-  File "/home/opc/python/lib/python3.7/site-packages/oci/_vendor/urllib3/connection.py", line 192, in _new_conn
-    self, "Failed to establish a new connection: %s" % e
-oci._vendor.urllib3.exceptions.NewConnectionError: <oci.base_client.OCIConnection object at 0x7f4734370d68>: Failed to establish a new connection: [Errno -2] Name or service not known
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "/home/opc/python/lib/python3.7/site-packages/oci/_vendor/requests/adapters.py", line 458, in send
-    enforce_content_length=True
-  File "/home/opc/python/lib/python3.7/site-packages/oci/_vendor/urllib3/connectionpool.py", line 808, in urlopen
-    method, url, error=e, _pool=self, _stacktrace=sys.exc_info()[2]
-  File "/home/opc/python/lib/python3.7/site-packages/oci/_vendor/urllib3/util/retry.py", line 599, in increment
-    raise MaxRetryError(_pool, url, error or ResponseError(cause))
-oci._vendor.urllib3.exceptions.MaxRetryError: OCIConnectionPool(host='anomalydetection.aiservice.us-ashburn-1.oci.oraclecloud.com', port=443): Max retries exceeded with url: /20210101/dataAssets?compartmentId=ocid1.compartment.oc1..aaaaaaaaykn3hgoydak7wfeqplsd7vuqgsf2lhiojtcze4g3ojoowisxqcfq (Caused by NewConnectionError('<oci.base_client.OCIConnection object at 0x7f4734370d68>: Failed to establish a new connection: [Errno -2] Name or service not known'))
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "/home/opc/python/lib/python3.7/site-packages/oci/base_client.py", line 679, in request
-    timeout=self.timeout)
-  File "/home/opc/python/lib/python3.7/site-packages/oci/_vendor/requests/sessions.py", line 536, in request
-    resp = self.send(prep, **send_kwargs)
-  File "/home/opc/python/lib/python3.7/site-packages/oci/_vendor/requests/sessions.py", line 652, in send
-    r = adapter.send(request, **kwargs)
-  File "/home/opc/python/lib/python3.7/site-packages/oci/_vendor/requests/adapters.py", line 527, in send
-    raise ConnectionError(e, request=request)
-oci._vendor.requests.exceptions.ConnectionError: (MaxRetryError("OCIConnectionPool(host='anomalydetection.aiservice.us-ashburn-1.oci.oraclecloud.com', port=443): Max retries exceeded with url: /20210101/dataAssets?compartmentId=ocid1.compartment.oc1..aaaaaaaaykn3hgoydak7wfeqplsd7vuqgsf2lhiojtcze4g3ojoowisxqcfq (Caused by NewConnectionError('<oci.base_client.OCIConnection object at 0x7f4734370d68>: Failed to establish a new connection: [Errno -2] Name or service not known'))"), 'Request Endpoint: GET https://anomalydetection.aiservice.us-ashburn-1.oci.oraclecloud.com/20210101/dataAssets See https://docs.oracle.com/en-us/iaas/Content/API/Concepts/sdk_troubleshooting.htm for help troubleshooting this error, or contact support and provide this full error message.')
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "/home/opc/scripts/OCI-SuperDelete/delete.py", line 367, in <module>
-    DeleteAny(config, signer, processCompartments, "ai_anomaly_detection.AnomalyDetectionClient", "data_asset")
-  File "/home/opc/scripts/OCI-SuperDelete/ocimodules/AnyDelete.py", line 45, in DeleteAny
-    items = eval("oci.pagination.list_call_get_all_results(object.{}, compartment_id=Compartment.id{}, retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY).data".format(ListCommand, Extra))
-  File "<string>", line 1, in <module>
-  File "/home/opc/python/lib/python3.7/site-packages/oci/pagination/pagination_utils.py", line 205, in list_call_get_all_results
-    for response in list_call_get_all_results_generator(list_func_ref, 'response', *list_func_args, **list_func_kwargs):
-  File "/home/opc/python/lib/python3.7/site-packages/oci/pagination/pagination_utils.py", line 274, in list_call_get_all_results_generator
-    call_result = retry.DEFAULT_RETRY_STRATEGY.make_retrying_call(list_func_ref, *list_func_args, **list_func_kwargs)
-  File "/home/opc/python/lib/python3.7/site-packages/oci/retry/retry.py", line 308, in make_retrying_call
-    response = func_ref(*func_args, **func_kwargs)
-  File "/home/opc/python/lib/python3.7/site-packages/oci/ai_anomaly_detection/anomaly_detection_client.py", line 2841, in list_data_assets
-    required_arguments=required_arguments)
-  File "/home/opc/python/lib/python3.7/site-packages/oci/retry/retry.py", line 308, in make_retrying_call
-    response = func_ref(*func_args, **func_kwargs)
-  File "/home/opc/python/lib/python3.7/site-packages/oci/base_client.py", line 529, in call_api
-    response = self.request(request, allow_control_chars, operation_name, api_reference_link)
-  File "/home/opc/python/lib/python3.7/site-packages/circuitbreaker.py", line 52, in wrapper
-    return self.call(function, *args, **kwargs)
-  File "/home/opc/python/lib/python3.7/site-packages/circuitbreaker.py", line 67, in call
-    result = func(*args, **kwargs)
-  File "/home/opc/python/lib/python3.7/site-packages/oci/base_client.py", line 694, in request
-    raise exceptions.RequestException(e)
-oci.exceptions.RequestException: (MaxRetryError("OCIConnectionPool(host='anomalydetection.aiservice.us-ashburn-1.oci.oraclecloud.com', port=443): Max retries exceeded with url: /20210101/dataAssets?compartmentId=ocid1.compartment.oc1..aaaaaaaaykn3hgoydak7wfeqplsd7vuqgsf2lhiojtcze4g3ojoowisxqcfq (Caused by NewConnectionError('<oci.base_client.OCIConnection object at 0x7f4734370d68>: Failed to establish a new connection: [Errno -2] Name or service not known'))"), 'Request Endpoint: GET https://anomalydetection.aiservice.us-ashburn-1.oci.oraclecloud.com/20210101/dataAssets See https://docs.oracle.com/en-us/iaas/Content/API/Concepts/sdk_troubleshooting.htm for help troubleshooting this error, or contact support and provide this full error message.')
+{
+  "eventType": "com.oraclecloud.cloudguard.problemdetected",
+  "cloudEventsVersion": "0.1",
+  "eventTypeVersion": "2.0",
+  "source": "CloudGuardResponderEngine",
+  "eventTime": "2025-08-28T12:45:22Z",
+  "contentType": "application/json",
+  "data": {
+    "compartmentId": "ocid1.compartment.oc1..aaaaaaaaf3t5nho53gfnagagdezv6tz2ltkup3lfoqt3vpwlep3mttk2pg4a",
+    "compartmentName": "OCI-LAB-68",
+    "resourceName": "VNIC without associated network security group",
+    "resourceId": "ocid1.cloudguardproblem.oc1.iad.amaaaaaa3vux2gkqaughslks7pp6w2asjyjohnh7v7bpjalrwqetwsdvdf3q",
+    "additionalDetails": {
+      "tenantId": "ocid1.tenancy.oc1..aaaaaaaaabc4esylkbw3jkbquuluuq4iftuuwnfc2yg2fguo4s7j43exv6pq",
+      "status": "OPEN",
+      "reason": "New Problem detected by CloudGuard",
+      "problemName": "VNIC_WITHOUT_NETWORK_SECURITY_GROUP",
+      "riskLevel": "MINOR",
+      "problemType": "CONFIG_CHANGE",
+      "resourceName": "kamei-instance-20250828-1639",
+      "resourceId": "ocid1.vnic.oc1.iad.abuwcljsduxzfy6mikytrbzbyzmk47nwd5zpshzmavuwor435ypdinw4uftq",
+      "resourceType": "Instance",
+      "targetId": "ocid1.cloudguardtarget.oc1.iad.amaaaaaa3vux2gianda6fvrdjodb77xzyzi2373fjifkv7varo7a4h46xvaq",
+      "labels": "COMPUTE, Network",
+      "firstDetected": "2025-08-28T12:45:15.330Z",
+      "lastDetected": "2025-08-28T12:45:15.330Z",
+      "region": "us-ashburn-1",
+      "problemDescription": "A virtual network interface card (VNIC) is\u00a0a networking component that enables a resource such as a compute instance to connect to a virtual cloud network (VCN). The VNIC determines how the instance connects with endpoints inside and outside the VCN. Each VNIC resides in a subnet in a VCN. An VNIC with an NSG may trigger a connectivity issue.",
+      "problemRecommendation": "Ensure that the missing NSG association from this VNIC is expected."
+    }
+  },
+  "eventID": "d0f630fd-7169-476e-8a65-5db27d95c20c",
+  "extensions": {
+    "compartmentId": "ocid1.compartment.oc1..aaaaaaaaf3t5nho53gfnagagdezv6tz2ltkup3lfoqt3vpwlep3mttk2pg4a"
+  }
+}
