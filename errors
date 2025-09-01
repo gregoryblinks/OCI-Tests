@@ -200,3 +200,21 @@ Error: {'target_service': 'object_storage', 'status': 404, 'code': 'NamespaceNot
     "compartmentId": "ocid1.compartment.oc1..aaaaaaaaf3t5nho53gfnagagdezv6tz2ltkup3lfoqt3vpwlep3mttk2pg4a"
   }
 }
+
+allow any-user to inspect compartments in tenancy
+  where all {request.principal.type = 'analyticsinstance',
+            request.principal.id = '<OAC_INSTANCE_OCID>'}
+
+allow any-user to read objectstorage-namespaces in tenancy
+  where all {request.principal.type = 'analyticsinstance',
+            request.principal.id = '<OAC_INSTANCE_OCID>'}
+
+
+allow any-user to read buckets in compartment <BucketCompartment>
+  where all {request.principal.type = 'analyticsinstance',
+            request.principal.id = '<OAC_INSTANCE_OCID>'}
+
+allow any-user to read objects in compartment <BucketCompartment>
+  where all {request.principal.type = 'analyticsinstance',
+            request.principal.id = '<OAC_INSTANCE_OCID>'}
+
