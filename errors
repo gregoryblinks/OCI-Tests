@@ -218,3 +218,18 @@ allow any-user to read objects in compartment <BucketCompartment>
   where all {request.principal.type = 'analyticsinstance',
             request.principal.id = '<OAC_INSTANCE_OCID>'}
 
+cat > test_findings.csv <<'CSV'
+eventTime,tenantId,compartmentId,compartmentName,region,detectorType,detectorRuleId,problemId,problemName,severity,severityRank,riskLevel,resourceType,resourceId,lifecycleState,recommendation,firstDetected,lastDetected,tagsJson,payloadVersion
+2025-08-28T12:45:22Z,ocid1.tenancy.oc1..aaaaaaaaabc4esylkbw3jkbquuluuq4iftuuwnfc2yg2fguo4s7j43exv6pq,ocid1.compartment.oc1..aaaaaaaaf3t5nho53gfnagagdezv6tz2ltkup3lfoqt3vpwlep3mttk2pg4a,OCI-LAB-68,us-ashburn-1,,,,ocid1.cloudguardproblem.oc1.iad.amaaaaaa3vux2gkqaughslks7pp6w2asjyjohnh7v7bpjalrwqetwsdvdf3q,VNIC_WITHOUT_NETWORK_SECURITY_GROUP,,2,MINOR,Instance,ocid1.vnic.oc1.iad.abuwcljsduxzfy6mikytrbzbyzmk47nwd5zpshzmavuwor435ypdinw4uftq,OPEN,"Ensure that the missing NSG association from this VNIC is expected.",2025-08-28T12:45:15.330Z,2025-08-28T12:45:15.330Z,"{""labels"":""COMPUTE, Network""}",2.0
+CSV
+
+# optional: see your namespace
+oci os ns get
+
+# upload under a partitioned path OAC can browse
+oci os object put \
+  -bn cloud-guard-findings-bucket \
+  --file test_findings.csv \
+  --name dt=2025-08-28/hr=12/findings_test.csv \
+  --content-type "text/csv; charset=utf-8"
+
