@@ -1,0 +1,10 @@
+Incremental Forever Backup (IFB) ist eine Backup-Strategie, die im Exadata-Umfeld weit verbreitet
+ist. Dabei wird nur ein einziges vollständiges Backup (Level 0) erstellt. Danach werden
+ausschließlich inkrementelle Backups (Level 1) erzeugt. Diese werden regelmäßig in ein Image
+Copy gemergt, sodass dieses Image Copy immer wie ein aktuelles Full Backup verwendet werden
+kann. Wichtige Eigenschaften: - Nur ein Full Backup am Anfang. - Danach ausschließlich
+inkrementelle Backups. - Durch RMAN-Merge bleibt das Image Copy aktuell. - Restore erfolgt
+direkt aus dem Image Copy + Redo/Archivelogs. - Deutlich effizienter und schneller als klassische
+inkrementelle Backups. Besonderheiten in Exadata: - Nutzung von Block Change Tracking
+(BCT). - Storage Offload beschleunigt Backup-Operationen. - ZDLRA (Zero Data Loss Recovery
+Appliance) setzt voll auf IFB.
