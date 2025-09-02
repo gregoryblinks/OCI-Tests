@@ -263,7 +263,24 @@ Continuing from: state/last_processed_key.txt
 
 echo -n "" | oci os object put -bn <YOUR_BUCKET> --name state/last_processed_key.txt --file /dev/stdin
 
-Error: ORA-01400: cannot insert NULL into ("CLOUDGUARD_APP"."CLOUDGUARD_FINDINGS"."EVENT_ID")
-Help: https://docs.oracle.com/error-help/db/ora-01400/
-Error: ORA-01400: cannot insert NULL into ("CLOUDGUARD_APP"."CLOUDGUARD_FINDINGS"."EVENT_ID")
-Help: https://docs.oracle.com/error-help/db/ora-01400/
+[opc@oci-admin-01 cloud_guard_processor]$ echo '{}' |DEBUG=1 fn invoke cloud-guard-processing-app cloud_guard_processor                                                                POST /20181201/functions/ocid1.fnfunc.oc1.iad.aaaaaaaaanek6owb3wzp6yiljtyp3fnmtgj6ywghigm524hpxb6s3fyjqvhq/actions/invoke HTTP/1.1
+Host: ob3xlmlev3a.us-ashburn-1.functions.oci.oraclecloud.com
+User-Agent: Go-http-client/1.1
+Content-Length: 3
+Content-Type: text/plain
+Accept-Encoding: gzip
+
+{}
+
+HTTP/1.1 200 OK
+Content-Length: 59
+Content-Type: text/plain
+Date: Tue, 02 Sep 2025 14:51:13 GMT
+Fn-Call-Id: 01K45EJ53P1BT0W58ZJ01G7CGQ
+Fn-Fdk-Runtime: python/3.9.20 final
+Fn-Fdk-Version: fdk-python/0.1.97
+Opc-Request-Id: /01K45EJ528000000000035ACFM/01K45EJ528000000000035ACFN
+
+Skipped: no eventID in payload (likely a health/test call).
+Skipped: no eventID in payload (likely a health/test call).
+[opc@oci-admin-01 cloud_guard_processor]$
