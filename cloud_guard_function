@@ -1,320 +1,156 @@
-import io
-import json
-import csv
+import io, os, json, logging, base64, datetime
+import oracledb
 import oci
-import datetime
-import os
-import logging
-from oci.exceptions import ServiceError
 
-# ======== Configuration (via env) ========
-# Required:
-#   BUCKET_NAME         -> your Object Storage bucket
-#   COMPARTMENT_OCID    -> OCID of the bucket's compartment
-# Optional:
-#   CSV_OBJECT_NAME     -> cumulative CSV object name (default: cloudguard_findings.csv)
-#   BACKFILL_PREFIX     -> only process JSON keys under this prefix during backfill (default: "")
-#   BACKFILL_SUFFIX     -> only process keys ending with this suffix during backfill (default: ".json")
+# ---------- ENV ----------
+ADW_CONNECT_STRING = os.getenv("ADW_CONNECT_STRING")  # full (description=...) copied from ADW (TLS)
+ADW_USER = os.getenv("ADW_USER", "CLOUDGUARD_APP")
+ADW_PASSWORD_SECRET_OCID = os.getenv("ADW_PASSWORD_SECRET_OCID")  # Vault secret OCID
 
-CSV_OBJECT_NAME = os.getenv("CSV_OBJECT_NAME", "cloudguard_findings.csv")
-BACKFILL_PREFIX = os.getenv("BACKFILL_PREFIX", "")
-BACKFILL_SUFFIX = os.getenv("BACKFILL_SUFFIX", ".json")
+# ---------- Helpers ----------
 
-# Where we store a backfill checkpoint (the highest key processed)
-CHECKPOINT_KEY = os.getenv("CHECKPOINT_KEY", "state/last_processed_key.txt")
-
-# ======== CSV schema ========
-CSV_HEADERS = [
-    # Event envelope
-    "eventType","cloudEventsVersion","payloadVersion","source","eventTime","contentType","eventId",
-    # Core problem context
-    "tenantId","compartmentId","extensionsCompartmentId","compartmentName","region",
-    "problemId","problemName","problemDisplayName","problemType","reason",
-    # Severity / risk
-    "severity","severityRank","riskLevel",
-    # Affected resource & target
-    "resourceType","resourceName","resourceId","targetId","lifecycleState",
-    # Guidance & timing
-    "problemDescription","recommendation","firstDetected","lastDetected",
-    # Labels / misc
-    "labels",
-    # Optional blobs for troubleshooting
-    "additionalDetailsJson","rawEventJson"
-]
-
-RANK_MAP = {
-    "CRITICAL": 4, "CRITICALS": 4,
-    "MAJOR": 3, "HIGH": 3,
-    "MINOR": 2, "MEDIUM": 2,
-    "LOW": 1
-}
+RANK_MAP = {"CRITICAL":4, "MAJOR":3, "HIGH":3, "MINOR":2, "MEDIUM":2, "LOW":1}
 
 def _rank(sev: str, risk: str) -> int:
     s = (sev or "").upper()
     r = (risk or "").upper()
     return RANK_MAP.get(s, RANK_MAP.get(r, 0))
 
-def flatten_for_csv(ev: dict) -> dict:
+def _parse_ts(s: str):
+    if not s: return None
+    try:
+        # handle both "...Z" and with millis
+        s = s.replace("Z", "+00:00")
+        return datetime.datetime.fromisoformat(s).replace(tzinfo=None)  # store as UTC TIMESTAMP
+    except Exception:
+        return None
+
+def flatten_row(ev: dict) -> dict:
     data = ev.get("data", {}) or {}
     addl = data.get("additionalDetails", {}) or {}
     exts = ev.get("extensions", {}) or {}
 
     severity = (data.get("severity") or "").upper()
     risk = (addl.get("riskLevel") or data.get("riskLevel") or "")
-    labels = addl.get("labels", "")
-
-    addl_json = json.dumps(addl, separators=(",", ":")) if addl else ""
-    raw_event_json = json.dumps(ev, separators=(",", ":")) if ev else ""
 
     return {
-        "eventType":              ev.get("eventType", ""),
-        "cloudEventsVersion":     ev.get("cloudEventsVersion", ""),
-        "payloadVersion":         ev.get("eventTypeVersion", ""),
-        "source":                 ev.get("source", ""),
-        "eventTime":              ev.get("eventTime", ""),
-        "contentType":            ev.get("contentType", ""),
-        "eventId":                ev.get("eventID", ""),
+        "event_time":            _parse_ts(ev.get("eventTime")),
+        "event_type":            ev.get("eventType", ""),
+        "cloud_events_version":  ev.get("cloudEventsVersion", ""),
+        "payload_version":       ev.get("eventTypeVersion", ""),
+        "source":                ev.get("source", ""),
+        "event_id":              ev.get("eventID", ""),  # PK / de-dupe key
 
-        "tenantId":               addl.get("tenantId", ""),
-        "compartmentId":          data.get("compartmentId", ""),
-        "extensionsCompartmentId": exts.get("compartmentId", ""),
-        "compartmentName":        data.get("compartmentName", ""),
-        "region":                 addl.get("region", ""),
+        "tenant_id":             addl.get("tenantId", ""),
+        "compartment_id":        data.get("compartmentId", ""),
+        "extensions_compartment_id": exts.get("compartmentId", ""),
+        "compartment_name":      data.get("compartmentName", ""),
+        "region":                addl.get("region", ""),
 
-        "problemId":              data.get("resourceId", ""),
-        "problemName":            addl.get("problemName") or data.get("resourceName", ""),
-        "problemDisplayName":     data.get("resourceName", ""),
-        "problemType":            addl.get("problemType", ""),
-        "reason":                 addl.get("reason", ""),
+        "problem_id":            data.get("resourceId", ""),
+        "problem_name":          addl.get("problemName") or data.get("resourceName", ""),
+        "problem_display_name":  data.get("resourceName", ""),
+        "problem_type":          addl.get("problemType", ""),
+        "reason":                addl.get("reason", ""),
 
-        "severity":               severity,
-        "severityRank":           _rank(severity, risk),
-        "riskLevel":              risk,
+        "severity":              severity,
+        "severity_rank":         _rank(severity, risk),
+        "risk_level":            risk,
 
-        "resourceType":           addl.get("resourceType", ""),
-        "resourceName":           addl.get("resourceName", ""),
-        "resourceId":             addl.get("resourceId", ""),
-        "targetId":               addl.get("targetId", ""),
-        "lifecycleState":         addl.get("status", ""),
+        "resource_type":         addl.get("resourceType", ""),
+        "resource_name":         addl.get("resourceName", ""),
+        "resource_id":           addl.get("resourceId", ""),
+        "target_id":             addl.get("targetId", ""),
+        "lifecycle_state":       addl.get("status", ""),
 
-        "problemDescription":     addl.get("problemDescription", ""),
-        "recommendation":         addl.get("problemRecommendation", ""),
-        "firstDetected":          addl.get("firstDetected", ""),
-        "lastDetected":           addl.get("lastDetected", ""),
+        "problem_description":   addl.get("problemDescription", ""),
+        "recommendation":        addl.get("problemRecommendation", ""),
+        "first_detected":        _parse_ts(addl.get("firstDetected")),
+        "last_detected":         _parse_ts(addl.get("lastDetected")),
 
-        "labels":                 labels,
-        "additionalDetailsJson":  addl_json,
-        "rawEventJson":           raw_event_json,
+        "labels":                addl.get("labels", ""),
+        "additional_details_json": json.dumps(addl, separators=(",", ":"), ensure_ascii=False) if addl else "",
+        "raw_event_json":        json.dumps(ev, separators=(",", ":"), ensure_ascii=False) if ev else "",
     }
 
-def _csv_rows_string(rows: list, include_header: bool) -> str:
-    buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=CSV_HEADERS, lineterminator="\n", extrasaction="ignore")
-    if include_header:
-        writer.writeheader()
-    for r in rows:
-        writer.writerow(r)
-    return buf.getvalue()
+# Vault secret fetch using Resource Principal
+def _get_db_password(signer) -> str:
+    sc = oci.secrets.SecretsClient(config={}, signer=signer)
+    bundle = sc.get_secret_bundle(ADW_PASSWORD_SECRET_OCID).data
+    # secret content is base64-encoded
+    content = bundle.secret_bundle_content.content
+    return base64.b64decode(content).decode("utf-8")
 
-def _append_rows_cumulative(object_storage, namespace, bucket_name, rows: list) -> str:
-    """
-    Append rows to the single cumulative CSV via read-modify-write with ETag protection.
-    """
-    key = CSV_OBJECT_NAME
-    for attempt in range(1, 4):
-        try:
-            try:
-                head = object_storage.head_object(namespace, bucket_name, key)
-                exists = True
-                etag = head.headers.get("etag") or head.headers.get("ETag")
-            except ServiceError as se:
-                if se.status == 404:
-                    exists = False
-                    etag = None
-                else:
-                    raise
+# Keep a global pool across warm invocations
+POOL = None
 
-            if exists:
-                existing_obj = object_storage.get_object(namespace, bucket_name, key)
-                existing = existing_obj.data.content.decode("utf-8", errors="replace")
-                rows_csv = _csv_rows_string(rows, include_header=False)
-                if existing and not existing.endswith("\n"):
-                    existing += "\n"
-                new_body = (existing + rows_csv).encode("utf-8")
-                object_storage.put_object(
-                    namespace_name=namespace,
-                    bucket_name=bucket_name,
-                    object_name=key,
-                    put_object_body=new_body,
-                    content_type="text/csv; charset=utf-8",
-                    if_match=etag
-                )
-                return key
-            else:
-                rows_csv = _csv_rows_string(rows, include_header=True).encode("utf-8")
-                object_storage.put_object(
-                    namespace_name=namespace,
-                    bucket_name=bucket_name,
-                    object_name=key,
-                    put_object_body=rows_csv,
-                    content_type="text/csv; charset=utf-8"
-                )
-                return key
+def _get_pool():
+    global POOL
+    if POOL:
+        return POOL
 
-        except ServiceError as se:
-            if se.status == 412 and attempt < 3:
-                logging.getLogger().warning("ETag mismatch on attempt %d, retrying...", attempt)
-                continue
-            raise
-    raise RuntimeError("Failed to append to CSV after retries")
+    # Resource Principal signer (also used by Vault above)
+    signer = oci.auth.signers.get_resource_principals_signer()
 
-# ---------- Backfill helpers ----------
+    if not ADW_CONNECT_STRING:
+        raise ValueError("ADW_CONNECT_STRING env var is required (TLS connection descriptor from ADW).")
+    if not ADW_PASSWORD_SECRET_OCID:
+        raise ValueError("ADW_PASSWORD_SECRET_OCID env var is required (Vault secret OCID).")
 
-def _get_checkpoint(object_storage, namespace, bucket_name) -> str:
-    try:
-        obj = object_storage.get_object(namespace, bucket_name, CHECKPOINT_KEY)
-        return obj.data.content.decode("utf-8").strip()
-    except ServiceError as se:
-        if se.status == 404:
-            return ""  # no checkpoint yet
-        raise
+    db_password = _get_db_password(signer)
 
-def _put_checkpoint(object_storage, namespace, bucket_name, last_key: str):
-    object_storage.put_object(
-        namespace_name=namespace,
-        bucket_name=bucket_name,
-        object_name=CHECKPOINT_KEY,
-        put_object_body=(last_key or "").encode("utf-8"),
-        content_type="text/plain; charset=utf-8"
+    # Wallet-less TLS: pass the full (description=...) connect descriptor as 'dsn'
+    # Ensure ADW is set to allow TLS connections (not mutual TLS) and ACL allows your VCN/NAT.  See docs.
+    POOL = oracledb.create_pool(
+        user=ADW_USER,
+        password=db_password,
+        dsn=ADW_CONNECT_STRING,
+        min=1, max=4, increment=1
     )
+    return POOL
 
-def _is_json_finding_key(name: str) -> bool:
-    if CSV_OBJECT_NAME and name == CSV_OBJECT_NAME:
-        return False  # don't reprocess the cumulative CSV
-    if not name.endswith(BACKFILL_SUFFIX):
-        return False
-    if BACKFILL_PREFIX and not name.startswith(BACKFILL_PREFIX):
-        return False
-    return True
-
-def backfill_bucket_batched(object_storage, namespace, bucket_name, max_objects=200, resume_from=None):
-    """
-    Process up to `max_objects` JSON objects starting at `resume_from` (Object Storage 'start' token).
-    Returns: dict(processed, next_start, last_key, done)
-    """
-    processed = 0
-    last_key_seen = ""
-    start_token = resume_from
-    checkpoint = _get_checkpoint(object_storage, namespace, bucket_name)
-    logging.getLogger().info("Backfill batch start: resume_from=%s checkpoint=%s", resume_from, checkpoint)
-
-    # List one page starting at start_token
-    resp = object_storage.list_objects(
-        namespace_name=namespace,
-        bucket_name=bucket_name,
-        start=start_token,
-        fields="name"
-    )
-
-    rows_buffer = []
-    # Iterate page objects in order
-    for obj in resp.data.objects:
-        name = obj.name
-        # honor checkpoint (skip older/equal)
-        if checkpoint and name <= checkpoint:
-            last_key_seen = name
-            continue
-        if not _is_json_finding_key(name):
-            last_key_seen = name
-            continue
-
-        # fetch + parse
-        try:
-            content = object_storage.get_object(namespace, bucket_name, name).data.content
-            text = content.decode("utf-8", errors="replace")
-            try:
-                payload = json.loads(text)
-            except json.JSONDecodeError:
-                logging.getLogger().warning("Skipping malformed JSON: %s", name)
-                last_key_seen = name
-                continue
-
-            events = payload if isinstance(payload, list) else [payload]
-            for ev in events:
-                rows_buffer.append(flatten_for_csv(ev))
-                processed += 1
-
-            last_key_seen = name
-        except Exception as e:
-            logging.getLogger().error("Backfill failed for %s: %s", name, e)
-            last_key_seen = name
-            continue
-
-        # Stop when we’ve hit the batch max
-        if processed >= max_objects:
-            break
-
-    # Append in one go (only if we produced rows)
-    if rows_buffer:
-        _append_rows_cumulative(object_storage, namespace, bucket_name, rows_buffer)
-        _put_checkpoint(object_storage, namespace, bucket_name, last_key_seen)
-
-    # Compute next_start token
-    # If we broke early due to batch size, we need to continue from the *next* object after last_key_seen.
-    # Object Storage returns next_start_with (start token) for the next page; but if we didn't consume full page,
-    # reusing last_key_seen as resume_from is fine; the function will skip <= checkpoint on next run.
-    next_start = resp.data.next_start_with if (processed == 0 and resp.data.next_start_with) else last_key_seen
-
-    done = (processed == 0 and not resp.data.next_start_with)  # nothing processed and no more pages
-    return {"processed": processed, "next_start": next_start or "", "last_key": last_key_seen or checkpoint, "done": done}
-
-# ---------- Handler ----------
+MERGE_SQL = """
+MERGE INTO CLOUDGUARD_APP.CLOUDGUARD_FINDINGS t
+USING (SELECT :event_id AS event_id FROM dual) s
+ON (t.event_id = s.event_id)
+WHEN NOT MATCHED THEN INSERT (
+  EVENT_TIME, EVENT_TYPE, CLOUD_EVENTS_VERSION, PAYLOAD_VERSION, SOURCE, EVENT_ID,
+  TENANT_ID, COMPARTMENT_ID, EXTENSIONS_COMPARTMENT_ID, COMPARTMENT_NAME, REGION,
+  PROBLEM_ID, PROBLEM_NAME, PROBLEM_DISPLAY_NAME, PROBLEM_TYPE, REASON,
+  SEVERITY, SEVERITY_RANK, RISK_LEVEL,
+  RESOURCE_TYPE, RESOURCE_NAME, RESOURCE_ID, TARGET_ID, LIFECYCLE_STATE,
+  PROBLEM_DESCRIPTION, RECOMMENDATION,
+  FIRST_DETECTED, LAST_DETECTED,
+  LABELS, ADDITIONAL_DETAILS_JSON, RAW_EVENT_JSON
+) VALUES (
+  :event_time, :event_type, :cloud_events_version, :payload_version, :source, :event_id,
+  :tenant_id, :compartment_id, :extensions_compartment_id, :compartment_name, :region,
+  :problem_id, :problem_name, :problem_display_name, :problem_type, :reason,
+  :severity, :severity_rank, :risk_level,
+  :resource_type, :resource_name, :resource_id, :target_id, :lifecycle_state,
+  :problem_description, :recommendation,
+  :first_detected, :last_detected,
+  :labels, :additional_details_json, :raw_event_json
+)
+"""
 
 def handler(ctx, data: io.BytesIO = None):
     try:
-        raw_body = data.getvalue().decode("utf-8") if data else "{}"
-        payload = json.loads(raw_body) if raw_body else {}
-        action = payload.get("action") if isinstance(payload, dict) else None
-
-        bucket_name = os.getenv("BUCKET_NAME")
-        if not bucket_name:
-            raise ValueError("BUCKET_NAME environment variable not set")
-
-        compartment_id = os.getenv("COMPARTMENT_OCID")
-        if not compartment_id:
-            raise ValueError("COMPARTMENT_OCID environment variable not set")
-
-        signer = oci.auth.signers.get_resource_principals_signer()
-        object_storage = oci.object_storage.ObjectStorageClient(config={}, signer=signer)
-        namespace = object_storage.get_namespace().data
-        logging.getLogger().info("Resolved Namespace: %s", namespace)
-
-        # Bucket existence check (once)
-        buckets = object_storage.list_buckets(namespace, compartment_id).data
-        bucket_names = [b.name for b in buckets]
-        if bucket_name not in bucket_names:
-            msg = f"Bucket {bucket_name} NOT found in compartment {compartment_id}"
-            logging.getLogger().error(msg)
-            return msg
-
-        if action == "backfill":
-            # Optional controls from the request body
-            max_objects =  int(payload.get("max", 200))  if isinstance(payload, dict) else 200
-            resume_from = payload.get("resume_from")      if isinstance(payload, dict) else None
-        
-            result = backfill_bucket_batched(object_storage, namespace, bucket_name, max_objects=max_objects, resume_from=resume_from)
-            msg = json.dumps(result)  # return JSON so you can script it
-            logging.getLogger().info("Backfill batch result: %s", msg)
-            return msg
-
-        # Normal path: append incoming event(s)
+        body = data.getvalue().decode("utf-8") if data else "{}"
+        payload = json.loads(body) if body else {}
         events = payload if isinstance(payload, list) else [payload]
-        rows = [flatten_for_csv(ev) for ev in events]
-        obj_key = _append_rows_cumulative(object_storage, namespace, bucket_name, rows)
-        msg = f"Appended {len(rows)} row(s) into {bucket_name}/{obj_key}"
+
+        rows = [flatten_row(ev) for ev in events]
+        pool = _get_pool()
+        with pool.acquire() as conn:
+            with conn.cursor() as cur:
+                cur.executemany(MERGE_SQL, rows)
+            conn.commit()
+
+        msg = f"Inserted/Merged {len(rows)} finding(s) into ADW."
         logging.getLogger().info(msg)
         return msg
 
     except Exception as e:
-        logging.getLogger().error("Error: %s", str(e))
-        return f"Error: {str(e)}"
+        logging.getLogger().error("ADW insert error: %s", e, exc_info=True)
+        return f"Error: {e}"
