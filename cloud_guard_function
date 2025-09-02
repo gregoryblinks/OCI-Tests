@@ -197,61 +197,76 @@ def _is_json_finding_key(name: str) -> bool:
         return False
     return True
 
-def backfill_bucket(object_storage, namespace, bucket_name) -> dict:
+def backfill_bucket_batched(object_storage, namespace, bucket_name, max_objects=200, resume_from=None):
     """
-    Scan the bucket for JSON finding files and append them to the cumulative CSV.
-    Uses a checkpoint (lexicographic key) to avoid reprocessing.
+    Process up to `max_objects` JSON objects starting at `resume_from` (Object Storage 'start' token).
+    Returns: dict(processed, next_start, last_key, done)
     """
     processed = 0
     last_key_seen = ""
+    start_token = resume_from
     checkpoint = _get_checkpoint(object_storage, namespace, bucket_name)
-    logging.getLogger().info("Backfill starting from checkpoint key: '%s'", checkpoint)
+    logging.getLogger().info("Backfill batch start: resume_from=%s checkpoint=%s", resume_from, checkpoint)
 
-    next_start = None
-    while True:
-        resp = object_storage.list_objects(
-            namespace_name=namespace,
-            bucket_name=bucket_name,
-            start=next_start,
-            fields="name"
-        )
-        for obj in resp.data.objects:
-            name = obj.name
-            if checkpoint and name <= checkpoint:
-                continue
-            if not _is_json_finding_key(name):
-                continue
+    # List one page starting at start_token
+    resp = object_storage.list_objects(
+        namespace_name=namespace,
+        bucket_name=bucket_name,
+        start=start_token,
+        fields="name"
+    )
+
+    rows_buffer = []
+    # Iterate page objects in order
+    for obj in resp.data.objects:
+        name = obj.name
+        # honor checkpoint (skip older/equal)
+        if checkpoint and name <= checkpoint:
+            last_key_seen = name
+            continue
+        if not _is_json_finding_key(name):
+            last_key_seen = name
+            continue
+
+        # fetch + parse
+        try:
+            content = object_storage.get_object(namespace, bucket_name, name).data.content
+            text = content.decode("utf-8", errors="replace")
             try:
-                content = object_storage.get_object(namespace, bucket_name, name).data.content
-                text = content.decode("utf-8", errors="replace")
-                try:
-                    payload = json.loads(text)
-                except json.JSONDecodeError:
-                    # Skip non-JSON files that match suffix, or malformed
-                    logging.getLogger().warning("Skipping non-JSON or malformed: %s", name)
-                    last_key_seen = name
-                    continue
-
-                events = payload if isinstance(payload, list) else [payload]
-                rows = [flatten_for_csv(ev) for ev in events]
-                _append_rows_cumulative(object_storage, namespace, bucket_name, rows)
-                processed += len(rows)
+                payload = json.loads(text)
+            except json.JSONDecodeError:
+                logging.getLogger().warning("Skipping malformed JSON: %s", name)
                 last_key_seen = name
+                continue
 
-            except Exception as e:
-                logging.getLogger().error("Backfill failed for %s: %s", name, e)
-                # continue to next object
+            events = payload if isinstance(payload, list) else [payload]
+            for ev in events:
+                rows_buffer.append(flatten_for_csv(ev))
+                processed += 1
 
-        if resp.data.next_start_with:
-            next_start = resp.data.next_start_with
-        else:
+            last_key_seen = name
+        except Exception as e:
+            logging.getLogger().error("Backfill failed for %s: %s", name, e)
+            last_key_seen = name
+            continue
+
+        # Stop when we’ve hit the batch max
+        if processed >= max_objects:
             break
 
-    # Update checkpoint if we advanced
-    if last_key_seen and last_key_seen != checkpoint:
+    # Append in one go (only if we produced rows)
+    if rows_buffer:
+        _append_rows_cumulative(object_storage, namespace, bucket_name, rows_buffer)
         _put_checkpoint(object_storage, namespace, bucket_name, last_key_seen)
 
-    return {"processed": processed, "last_key": last_key_seen or checkpoint}
+    # Compute next_start token
+    # If we broke early due to batch size, we need to continue from the *next* object after last_key_seen.
+    # Object Storage returns next_start_with (start token) for the next page; but if we didn't consume full page,
+    # reusing last_key_seen as resume_from is fine; the function will skip <= checkpoint on next run.
+    next_start = resp.data.next_start_with if (processed == 0 and resp.data.next_start_with) else last_key_seen
+
+    done = (processed == 0 and not resp.data.next_start_with)  # nothing processed and no more pages
+    return {"processed": processed, "next_start": next_start or "", "last_key": last_key_seen or checkpoint, "done": done}
 
 # ---------- Handler ----------
 
@@ -283,9 +298,13 @@ def handler(ctx, data: io.BytesIO = None):
             return msg
 
         if action == "backfill":
-            result = backfill_bucket(object_storage, namespace, bucket_name)
-            msg = f"Backfill done: processed={result['processed']}, last_key={result['last_key']}"
-            logging.getLogger().info(msg)
+            # Optional controls from the request body
+            max_objects =  int(payload.get("max", 200))  if isinstance(payload, dict) else 200
+            resume_from = payload.get("resume_from")      if isinstance(payload, dict) else None
+        
+            result = backfill_bucket_batched(object_storage, namespace, bucket_name, max_objects=max_objects, resume_from=resume_from)
+            msg = json.dumps(result)  # return JSON so you can script it
+            logging.getLogger().info("Backfill batch result: %s", msg)
             return msg
 
         # Normal path: append incoming event(s)
