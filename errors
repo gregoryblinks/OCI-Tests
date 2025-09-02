@@ -240,3 +240,5 @@ https://docs.docker.com/engine/reference/commandline/login/#credentials-store
 
 Login Succeeded
 [opc@oci-admin-01 cloud_guard_processor]$ fn -v deploy --app cloud-guard-processing-app
+
+[opc@oci-admin-01 cloud_guard_processor]$ echo '{"id":"finding-test"}' |DEBUG=1 fn invoke cloud-guard-processing-app cloud_guard_processor
