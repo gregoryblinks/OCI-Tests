@@ -260,3 +260,5 @@ done
 
 Continuing from: state/last_processed_key.txt
 {"processed": 0, "next_start": "state/last_processed_key.txt", "last_key": "state/last_processed_key.txt", "done": true}
+
+echo -n "" | oci os object put -bn <YOUR_BUCKET> --name state/last_processed_key.txt --file /dev/stdin
