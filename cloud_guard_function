@@ -1,13 +1,29 @@
 import io
 import json
 import csv
-import uuid
 import oci
 import datetime
 import os
 import logging
+from oci.exceptions import ServiceError
 
-# ---------- CSV schema ----------
+# ======== Configuration (via env) ========
+# Required:
+#   BUCKET_NAME         -> your Object Storage bucket
+#   COMPARTMENT_OCID    -> OCID of the bucket's compartment
+# Optional:
+#   CSV_OBJECT_NAME     -> cumulative CSV object name (default: cloudguard_findings.csv)
+#   BACKFILL_PREFIX     -> only process JSON keys under this prefix during backfill (default: "")
+#   BACKFILL_SUFFIX     -> only process keys ending with this suffix during backfill (default: ".json")
+
+CSV_OBJECT_NAME = os.getenv("CSV_OBJECT_NAME", "cloudguard_findings.csv")
+BACKFILL_PREFIX = os.getenv("BACKFILL_PREFIX", "")
+BACKFILL_SUFFIX = os.getenv("BACKFILL_SUFFIX", ".json")
+
+# Where we store a backfill checkpoint (the highest key processed)
+CHECKPOINT_KEY = os.getenv("CHECKPOINT_KEY", "state/last_processed_key.txt")
+
+# ======== CSV schema ========
 CSV_HEADERS = [
     # Event envelope
     "eventType","cloudEventsVersion","payloadVersion","source","eventTime","contentType","eventId",
@@ -39,10 +55,6 @@ def _rank(sev: str, risk: str) -> int:
     return RANK_MAP.get(s, RANK_MAP.get(r, 0))
 
 def flatten_for_csv(ev: dict) -> dict:
-    """
-    Flattens a Cloud Guard problem event to one CSV row.
-    Covers all fields in the sample you provided.
-    """
     data = ev.get("data", {}) or {}
     addl = data.get("additionalDetails", {}) or {}
     exts = ev.get("extensions", {}) or {}
@@ -51,12 +63,10 @@ def flatten_for_csv(ev: dict) -> dict:
     risk = (addl.get("riskLevel") or data.get("riskLevel") or "")
     labels = addl.get("labels", "")
 
-    # Optional raw blobs for troubleshooting / schema evolution
     addl_json = json.dumps(addl, separators=(",", ":")) if addl else ""
     raw_event_json = json.dumps(ev, separators=(",", ":")) if ev else ""
 
     return {
-        # Envelope
         "eventType":              ev.get("eventType", ""),
         "cloudEventsVersion":     ev.get("cloudEventsVersion", ""),
         "payloadVersion":         ev.get("eventTypeVersion", ""),
@@ -65,112 +75,227 @@ def flatten_for_csv(ev: dict) -> dict:
         "contentType":            ev.get("contentType", ""),
         "eventId":                ev.get("eventID", ""),
 
-        # Core problem context
         "tenantId":               addl.get("tenantId", ""),
         "compartmentId":          data.get("compartmentId", ""),
         "extensionsCompartmentId": exts.get("compartmentId", ""),
         "compartmentName":        data.get("compartmentName", ""),
         "region":                 addl.get("region", ""),
 
-        # Problem identity
-        "problemId":              data.get("resourceId", ""),   # Cloud Guard problem OCID
+        "problemId":              data.get("resourceId", ""),
         "problemName":            addl.get("problemName") or data.get("resourceName", ""),
-        "problemDisplayName":     data.get("resourceName", ""), # human-friendly display
+        "problemDisplayName":     data.get("resourceName", ""),
         "problemType":            addl.get("problemType", ""),
         "reason":                 addl.get("reason", ""),
 
-        # Severity / risk
         "severity":               severity,
         "severityRank":           _rank(severity, risk),
         "riskLevel":              risk,
 
-        # Affected resource & target
         "resourceType":           addl.get("resourceType", ""),
         "resourceName":           addl.get("resourceName", ""),
         "resourceId":             addl.get("resourceId", ""),
         "targetId":               addl.get("targetId", ""),
         "lifecycleState":         addl.get("status", ""),
 
-        # Guidance & timing
         "problemDescription":     addl.get("problemDescription", ""),
         "recommendation":         addl.get("problemRecommendation", ""),
         "firstDetected":          addl.get("firstDetected", ""),
         "lastDetected":           addl.get("lastDetected", ""),
 
-        # Labels / misc
         "labels":                 labels,
-
-        # Optional blobs (handy for debugging)
         "additionalDetailsJson":  addl_json,
         "rawEventJson":           raw_event_json,
     }
 
-def write_csv_to_bucket(object_storage, namespace, bucket_name, rows: list) -> str:
-    """
-    Writes the given rows (list of dicts) as a single CSV file with header.
-    Returns the object key used.
-    """
-    now = datetime.datetime.utcnow()
-    key = f"dt={now:%Y-%m-%d}/hr={now:%H}/findings_{now:%Y%m%d_%H%M%S}_{uuid.uuid4().hex[:8]}.csv"
-
+def _csv_rows_string(rows: list, include_header: bool) -> str:
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=CSV_HEADERS, lineterminator="\n", extrasaction="ignore")
-    writer.writeheader()
+    if include_header:
+        writer.writeheader()
     for r in rows:
         writer.writerow(r)
+    return buf.getvalue()
 
-    body = buf.getvalue().encode("utf-8")
+def _append_rows_cumulative(object_storage, namespace, bucket_name, rows: list) -> str:
+    """
+    Append rows to the single cumulative CSV via read-modify-write with ETag protection.
+    """
+    key = CSV_OBJECT_NAME
+    for attempt in range(1, 4):
+        try:
+            try:
+                head = object_storage.head_object(namespace, bucket_name, key)
+                exists = True
+                etag = head.headers.get("etag") or head.headers.get("ETag")
+            except ServiceError as se:
+                if se.status == 404:
+                    exists = False
+                    etag = None
+                else:
+                    raise
 
+            if exists:
+                existing_obj = object_storage.get_object(namespace, bucket_name, key)
+                existing = existing_obj.data.content.decode("utf-8", errors="replace")
+                rows_csv = _csv_rows_string(rows, include_header=False)
+                if existing and not existing.endswith("\n"):
+                    existing += "\n"
+                new_body = (existing + rows_csv).encode("utf-8")
+                object_storage.put_object(
+                    namespace_name=namespace,
+                    bucket_name=bucket_name,
+                    object_name=key,
+                    put_object_body=new_body,
+                    content_type="text/csv; charset=utf-8",
+                    if_match=etag
+                )
+                return key
+            else:
+                rows_csv = _csv_rows_string(rows, include_header=True).encode("utf-8")
+                object_storage.put_object(
+                    namespace_name=namespace,
+                    bucket_name=bucket_name,
+                    object_name=key,
+                    put_object_body=rows_csv,
+                    content_type="text/csv; charset=utf-8"
+                )
+                return key
+
+        except ServiceError as se:
+            if se.status == 412 and attempt < 3:
+                logging.getLogger().warning("ETag mismatch on attempt %d, retrying...", attempt)
+                continue
+            raise
+    raise RuntimeError("Failed to append to CSV after retries")
+
+# ---------- Backfill helpers ----------
+
+def _get_checkpoint(object_storage, namespace, bucket_name) -> str:
+    try:
+        obj = object_storage.get_object(namespace, bucket_name, CHECKPOINT_KEY)
+        return obj.data.content.decode("utf-8").strip()
+    except ServiceError as se:
+        if se.status == 404:
+            return ""  # no checkpoint yet
+        raise
+
+def _put_checkpoint(object_storage, namespace, bucket_name, last_key: str):
     object_storage.put_object(
         namespace_name=namespace,
         bucket_name=bucket_name,
-        object_name=key,
-        put_object_body=body,
-        content_type="text/csv; charset=utf-8"
+        object_name=CHECKPOINT_KEY,
+        put_object_body=(last_key or "").encode("utf-8"),
+        content_type="text/plain; charset=utf-8"
     )
-    return key
+
+def _is_json_finding_key(name: str) -> bool:
+    if CSV_OBJECT_NAME and name == CSV_OBJECT_NAME:
+        return False  # don't reprocess the cumulative CSV
+    if not name.endswith(BACKFILL_SUFFIX):
+        return False
+    if BACKFILL_PREFIX and not name.startswith(BACKFILL_PREFIX):
+        return False
+    return True
+
+def backfill_bucket(object_storage, namespace, bucket_name) -> dict:
+    """
+    Scan the bucket for JSON finding files and append them to the cumulative CSV.
+    Uses a checkpoint (lexicographic key) to avoid reprocessing.
+    """
+    processed = 0
+    last_key_seen = ""
+    checkpoint = _get_checkpoint(object_storage, namespace, bucket_name)
+    logging.getLogger().info("Backfill starting from checkpoint key: '%s'", checkpoint)
+
+    next_start = None
+    while True:
+        resp = object_storage.list_objects(
+            namespace_name=namespace,
+            bucket_name=bucket_name,
+            start=next_start,
+            fields="name"
+        )
+        for obj in resp.data.objects:
+            name = obj.name
+            if checkpoint and name <= checkpoint:
+                continue
+            if not _is_json_finding_key(name):
+                continue
+            try:
+                content = object_storage.get_object(namespace, bucket_name, name).data.content
+                text = content.decode("utf-8", errors="replace")
+                try:
+                    payload = json.loads(text)
+                except json.JSONDecodeError:
+                    # Skip non-JSON files that match suffix, or malformed
+                    logging.getLogger().warning("Skipping non-JSON or malformed: %s", name)
+                    last_key_seen = name
+                    continue
+
+                events = payload if isinstance(payload, list) else [payload]
+                rows = [flatten_for_csv(ev) for ev in events]
+                _append_rows_cumulative(object_storage, namespace, bucket_name, rows)
+                processed += len(rows)
+                last_key_seen = name
+
+            except Exception as e:
+                logging.getLogger().error("Backfill failed for %s: %s", name, e)
+                # continue to next object
+
+        if resp.data.next_start_with:
+            next_start = resp.data.next_start_with
+        else:
+            break
+
+    # Update checkpoint if we advanced
+    if last_key_seen and last_key_seen != checkpoint:
+        _put_checkpoint(object_storage, namespace, bucket_name, last_key_seen)
+
+    return {"processed": processed, "last_key": last_key_seen or checkpoint}
+
+# ---------- Handler ----------
 
 def handler(ctx, data: io.BytesIO = None):
     try:
-        # ---- Parse incoming payload (single event or list) ----
         raw_body = data.getvalue().decode("utf-8") if data else "{}"
         payload = json.loads(raw_body) if raw_body else {}
-        events = payload if isinstance(payload, list) else [payload]
-        logging.getLogger().info("Received %d event(s)", len(events))
+        action = payload.get("action") if isinstance(payload, dict) else None
 
-        # ---- Ensure env vars ----
         bucket_name = os.getenv("BUCKET_NAME")
         if not bucket_name:
             raise ValueError("BUCKET_NAME environment variable not set")
 
-        compartment_id = os.getenv("COMPARTMENT_OCID")  # Compartment where the bucket lives
+        compartment_id = os.getenv("COMPARTMENT_OCID")
         if not compartment_id:
             raise ValueError("COMPARTMENT_OCID environment variable not set")
 
-        # ---- OCI client (Resource Principal) ----
         signer = oci.auth.signers.get_resource_principals_signer()
         object_storage = oci.object_storage.ObjectStorageClient(config={}, signer=signer)
         namespace = object_storage.get_namespace().data
         logging.getLogger().info("Resolved Namespace: %s", namespace)
 
-        # ---- Bucket existence check (your original logic) ----
+        # Bucket existence check (once)
         buckets = object_storage.list_buckets(namespace, compartment_id).data
         bucket_names = [b.name for b in buckets]
-        logging.getLogger().info("Buckets in compartment: %s", bucket_names)
-
         if bucket_name not in bucket_names:
             msg = f"Bucket {bucket_name} NOT found in compartment {compartment_id}"
             logging.getLogger().error(msg)
             return msg
 
-        # ---- Flatten to CSV rows & write CSV ----
-        rows = [flatten_for_csv(ev) for ev in events]
-        obj_key = write_csv_to_bucket(object_storage, namespace, bucket_name, rows)
+        if action == "backfill":
+            result = backfill_bucket(object_storage, namespace, bucket_name)
+            msg = f"Backfill done: processed={result['processed']}, last_key={result['last_key']}"
+            logging.getLogger().info(msg)
+            return msg
 
-        msg = f"Wrote {len(rows)} row(s) to {bucket_name}/{obj_key}"
+        # Normal path: append incoming event(s)
+        events = payload if isinstance(payload, list) else [payload]
+        rows = [flatten_for_csv(ev) for ev in events]
+        obj_key = _append_rows_cumulative(object_storage, namespace, bucket_name, rows)
+        msg = f"Appended {len(rows)} row(s) into {bucket_name}/{obj_key}"
         logging.getLogger().info(msg)
         return msg
 
     except Exception as e:
-        logging.getLogger().error("Error processing event: %s", str(e))
+        logging.getLogger().error("Error: %s", str(e))
         return f"Error: {str(e)}"
