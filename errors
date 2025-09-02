@@ -233,3 +233,10 @@ oci os object put \
   --name dt=2025-08-28/hr=12/findings_test.csv \
   --content-type "text/csv; charset=utf-8"
 
+[opc@oci-admin-01 cloud_guard_processor]$ export FN_REGISTRY=iad.ocir.io/acscloudengineering/cloud-guard-functions                                                                   [opc@oci-admin-01 cloud_guard_processor]$ echo "tZ[-RP#I#TOieRz79SmC" | docker login iad.ocir.io  --username "acscloudengineering/oracleidentitycloudservice/gregory.ohwerhi@oracle.com" --password-stdin
+WARNING! Your password will be stored unencrypted in /home/opc/.docker/config.json.
+Configure a credential helper to remove this warning. See
+https://docs.docker.com/engine/reference/commandline/login/#credentials-store
+
+Login Succeeded
+[opc@oci-admin-01 cloud_guard_processor]$ fn -v deploy --app cloud-guard-processing-app
