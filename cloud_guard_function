@@ -22,7 +22,7 @@ CSV_HEADERS = [
     "problemDescription","recommendation","firstDetected","lastDetected",
     # Labels / misc
     "labels",
-    # (optional blobs; helpful for debugging/evolution)
+    # Optional blobs for troubleshooting
     "additionalDetailsJson","rawEventJson"
 ]
 
@@ -39,6 +39,10 @@ def _rank(sev: str, risk: str) -> int:
     return RANK_MAP.get(s, RANK_MAP.get(r, 0))
 
 def flatten_for_csv(ev: dict) -> dict:
+    """
+    Flattens a Cloud Guard problem event to one CSV row.
+    Covers all fields in the sample you provided.
+    """
     data = ev.get("data", {}) or {}
     addl = data.get("additionalDetails", {}) or {}
     exts = ev.get("extensions", {}) or {}
@@ -48,59 +52,58 @@ def flatten_for_csv(ev: dict) -> dict:
     labels = addl.get("labels", "")
 
     # Optional raw blobs for troubleshooting / schema evolution
-    addl_json = json.dumps(addl, separators=(",",":")) if addl else ""
-    raw_event_json = json.dumps(ev, separators=(",",":")) if ev else ""
+    addl_json = json.dumps(addl, separators=(",", ":")) if addl else ""
+    raw_event_json = json.dumps(ev, separators=(",", ":")) if ev else ""
 
     return {
         # Envelope
-        "eventType":            ev.get("eventType",""),
-        "cloudEventsVersion":   ev.get("cloudEventsVersion",""),
-        "payloadVersion":       ev.get("eventTypeVersion",""),
-        "source":               ev.get("source",""),
-        "eventTime":            ev.get("eventTime",""),
-        "contentType":          ev.get("contentType",""),
-        "eventId":              ev.get("eventID",""),
+        "eventType":              ev.get("eventType", ""),
+        "cloudEventsVersion":     ev.get("cloudEventsVersion", ""),
+        "payloadVersion":         ev.get("eventTypeVersion", ""),
+        "source":                 ev.get("source", ""),
+        "eventTime":              ev.get("eventTime", ""),
+        "contentType":            ev.get("contentType", ""),
+        "eventId":                ev.get("eventID", ""),
 
         # Core problem context
-        "tenantId":             addl.get("tenantId",""),
-        "compartmentId":        data.get("compartmentId",""),
-        "extensionsCompartmentId": exts.get("compartmentId",""),
-        "compartmentName":      data.get("compartmentName",""),
-        "region":               addl.get("region",""),
+        "tenantId":               addl.get("tenantId", ""),
+        "compartmentId":          data.get("compartmentId", ""),
+        "extensionsCompartmentId": exts.get("compartmentId", ""),
+        "compartmentName":        data.get("compartmentName", ""),
+        "region":                 addl.get("region", ""),
 
         # Problem identity
-        "problemId":            data.get("resourceId",""),   # Cloud Guard problem OCID
-        "problemName":          addl.get("problemName") or data.get("resourceName",""),
-        "problemDisplayName":   data.get("resourceName",""), # human-friendly display
-        "problemType":          addl.get("problemType",""),
-        "reason":               addl.get("reason",""),
+        "problemId":              data.get("resourceId", ""),   # Cloud Guard problem OCID
+        "problemName":            addl.get("problemName") or data.get("resourceName", ""),
+        "problemDisplayName":     data.get("resourceName", ""), # human-friendly display
+        "problemType":            addl.get("problemType", ""),
+        "reason":                 addl.get("reason", ""),
 
         # Severity / risk
-        "severity":             severity,
-        "severityRank":         _rank(severity, risk),
-        "riskLevel":            risk,
+        "severity":               severity,
+        "severityRank":           _rank(severity, risk),
+        "riskLevel":              risk,
 
         # Affected resource & target
-        "resourceType":         addl.get("resourceType",""),
-        "resourceName":         addl.get("resourceName",""),
-        "resourceId":           addl.get("resourceId",""),
-        "targetId":             addl.get("targetId",""),
-        "lifecycleState":       addl.get("status",""),
+        "resourceType":           addl.get("resourceType", ""),
+        "resourceName":           addl.get("resourceName", ""),
+        "resourceId":             addl.get("resourceId", ""),
+        "targetId":               addl.get("targetId", ""),
+        "lifecycleState":         addl.get("status", ""),
 
         # Guidance & timing
-        "problemDescription":   addl.get("problemDescription",""),
-        "recommendation":       addl.get("problemRecommendation",""),
-        "firstDetected":        addl.get("firstDetected",""),
-        "lastDetected":         addl.get("lastDetected",""),
+        "problemDescription":     addl.get("problemDescription", ""),
+        "recommendation":         addl.get("problemRecommendation", ""),
+        "firstDetected":          addl.get("firstDetected", ""),
+        "lastDetected":           addl.get("lastDetected", ""),
 
         # Labels / misc
-        "labels":               labels,
+        "labels":                 labels,
 
         # Optional blobs (handy for debugging)
-        "additionalDetailsJson": addl_json,
-        "rawEventJson":          raw_event_json,
+        "additionalDetailsJson":  addl_json,
+        "rawEventJson":           raw_event_json,
     }
-}
 
 def write_csv_to_bucket(object_storage, namespace, bucket_name, rows: list) -> str:
     """
@@ -150,7 +153,7 @@ def handler(ctx, data: io.BytesIO = None):
         namespace = object_storage.get_namespace().data
         logging.getLogger().info("Resolved Namespace: %s", namespace)
 
-        # ---- Check bucket exists in that compartment (as you already do) ----
+        # ---- Bucket existence check (your original logic) ----
         buckets = object_storage.list_buckets(namespace, compartment_id).data
         bucket_names = [b.name for b in buckets]
         logging.getLogger().info("Buckets in compartment: %s", bucket_names)
@@ -160,7 +163,7 @@ def handler(ctx, data: io.BytesIO = None):
             logging.getLogger().error(msg)
             return msg
 
-        # ---- NEW: Flatten to CSV rows & write CSV ----
+        # ---- Flatten to CSV rows & write CSV ----
         rows = [flatten_for_csv(ev) for ev in events]
         obj_key = write_csv_to_bucket(object_storage, namespace, bucket_name, rows)
 
