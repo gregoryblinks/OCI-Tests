@@ -1,31 +1,81 @@
-import io, os, json, logging, base64, datetime
+import io
+import os
+import json
+import base64
+import logging
+import datetime
+
 import oracledb
 import oci
 
-# ---------- ENV ----------
-ADW_CONNECT_STRING = os.getenv("ADW_CONNECT_STRING")  # full (description=...) copied from ADW (TLS)
+# =========================
+# Environment configuration
+# =========================
+# Required:
+#   ADW_CONNECT_STRING        -> TLS connect descriptor copied from ADW "DB Connection" (TLS tab), e.g. (DESCRIPTION=...(PROTOCOL=tcps)...)
+#   ADW_USER                  -> database user to connect as (e.g., CLOUDGUARD_APP)
+#   ADW_PASSWORD_SECRET_OCID  -> OCID of the Vault secret that contains ADW_USER's password
+#
+# Optional:
+#   OCI_REGION                -> e.g., "us-ashburn-1" (defaults to function region; set to be explicit)
+
+ADW_CONNECT_STRING = os.getenv("ADW_CONNECT_STRING")
 ADW_USER = os.getenv("ADW_USER", "CLOUDGUARD_APP")
-ADW_PASSWORD_SECRET_OCID = os.getenv("ADW_PASSWORD_SECRET_OCID")  # Vault secret OCID
+ADW_PASSWORD_SECRET_OCID = os.getenv("ADW_PASSWORD_SECRET_OCID")
+OCI_REGION = os.getenv("OCI_REGION")  # optional
 
-# ---------- Helpers ----------
+# =========================
+# Severity mapping
+# =========================
+RANK_MAP = {
+    "CRITICAL": 4,
+    "MAJOR": 3,
+    "HIGH": 3,
+    "MINOR": 2,
+    "MEDIUM": 2,
+    "LOW": 1,
+}
 
-RANK_MAP = {"CRITICAL":4, "MAJOR":3, "HIGH":3, "MINOR":2, "MEDIUM":2, "LOW":1}
+# Keep a global pool across warm invocations for speed
+POOL = None
+
+
+# =========================
+# Utilities
+# =========================
+def _parse_ts(s: str):
+    """Parse ISO8601 (with or without Z and millis) into naive UTC datetime for TIMESTAMP."""
+    if not s:
+        return None
+    try:
+        s = s.replace("Z", "+00:00")
+        # fromisoformat supports offsets like +00:00
+        dt = datetime.datetime.fromisoformat(s)
+        # store as naive UTC TIMESTAMP (Oracle TIMESTAMP w/o TZ)
+        if dt.tzinfo:
+            return dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+        return dt
+    except Exception:
+        return None
+
 
 def _rank(sev: str, risk: str) -> int:
     s = (sev or "").upper()
     r = (risk or "").upper()
     return RANK_MAP.get(s, RANK_MAP.get(r, 0))
 
-def _parse_ts(s: str):
-    if not s: return None
-    try:
-        # handle both "...Z" and with millis
-        s = s.replace("Z", "+00:00")
-        return datetime.datetime.fromisoformat(s).replace(tzinfo=None)  # store as UTC TIMESTAMP
-    except Exception:
-        return None
+
+def _has_event_id(ev: dict) -> bool:
+    """True only if event has a non-empty eventID string."""
+    v = ev.get("eventID")
+    return isinstance(v, str) and v.strip() != ""
+
 
 def flatten_row(ev: dict) -> dict:
+    """Flatten a Cloud Guard event into a dict of bind variables for MERGE."""
+    # We call this only for events that passed _has_event_id
+    event_id = ev["eventID"]
+
     data = ev.get("data", {}) or {}
     addl = data.get("additionalDetails", {}) or {}
     exts = ev.get("extensions", {}) or {}
@@ -33,82 +83,92 @@ def flatten_row(ev: dict) -> dict:
     severity = (data.get("severity") or "").upper()
     risk = (addl.get("riskLevel") or data.get("riskLevel") or "")
 
+    # Build row
     return {
-        "event_time":            _parse_ts(ev.get("eventTime")),
-        "event_type":            ev.get("eventType", ""),
-        "cloud_events_version":  ev.get("cloudEventsVersion", ""),
-        "payload_version":       ev.get("eventTypeVersion", ""),
-        "source":                ev.get("source", ""),
-        "event_id":              ev.get("eventID", ""),  # PK / de-dupe key
+        "event_time": _parse_ts(ev.get("eventTime")),
+        "event_type": ev.get("eventType", ""),
+        "cloud_events_version": ev.get("cloudEventsVersion", ""),
+        "payload_version": ev.get("eventTypeVersion", ""),
+        "source": ev.get("source", ""),
+        "event_id": event_id,
 
-        "tenant_id":             addl.get("tenantId", ""),
-        "compartment_id":        data.get("compartmentId", ""),
+        "tenant_id": addl.get("tenantId", ""),
+        "compartment_id": data.get("compartmentId", ""),
         "extensions_compartment_id": exts.get("compartmentId", ""),
-        "compartment_name":      data.get("compartmentName", ""),
-        "region":                addl.get("region", ""),
+        "compartment_name": data.get("compartmentName", ""),
+        "region": addl.get("region", ""),
 
-        "problem_id":            data.get("resourceId", ""),
-        "problem_name":          addl.get("problemName") or data.get("resourceName", ""),
-        "problem_display_name":  data.get("resourceName", ""),
-        "problem_type":          addl.get("problemType", ""),
-        "reason":                addl.get("reason", ""),
+        "problem_id": data.get("resourceId", ""),  # Cloud Guard problem OCID
+        "problem_name": addl.get("problemName") or data.get("resourceName", ""),
+        "problem_display_name": data.get("resourceName", ""),
+        "problem_type": addl.get("problemType", ""),
+        "reason": addl.get("reason", ""),
 
-        "severity":              severity,
-        "severity_rank":         _rank(severity, risk),
-        "risk_level":            risk,
+        "severity": severity,
+        "severity_rank": _rank(severity, risk),
+        "risk_level": risk,
 
-        "resource_type":         addl.get("resourceType", ""),
-        "resource_name":         addl.get("resourceName", ""),
-        "resource_id":           addl.get("resourceId", ""),
-        "target_id":             addl.get("targetId", ""),
-        "lifecycle_state":       addl.get("status", ""),
+        "resource_type": addl.get("resourceType", ""),
+        "resource_name": addl.get("resourceName", ""),
+        "resource_id": addl.get("resourceId", ""),
+        "target_id": addl.get("targetId", ""),
+        "lifecycle_state": addl.get("status", ""),
 
-        "problem_description":   addl.get("problemDescription", ""),
-        "recommendation":        addl.get("problemRecommendation", ""),
-        "first_detected":        _parse_ts(addl.get("firstDetected")),
-        "last_detected":         _parse_ts(addl.get("lastDetected")),
+        "problem_description": addl.get("problemDescription", ""),
+        "recommendation": addl.get("problemRecommendation", ""),
+        "first_detected": _parse_ts(addl.get("firstDetected")),
+        "last_detected": _parse_ts(addl.get("lastDetected")),
 
-        "labels":                addl.get("labels", ""),
+        "labels": addl.get("labels", ""),
+
+        # Helpful for troubleshooting/evolution (CLOBs in table)
         "additional_details_json": json.dumps(addl, separators=(",", ":"), ensure_ascii=False) if addl else "",
-        "raw_event_json":        json.dumps(ev, separators=(",", ":"), ensure_ascii=False) if ev else "",
+        "raw_event_json": json.dumps(ev, separators=(",", ":"), ensure_ascii=False) if ev else "",
     }
 
-# Vault secret fetch using Resource Principal
+
 def _get_db_password(signer) -> str:
-    sc = oci.secrets.SecretsClient(config={}, signer=signer)
+    """Fetch the DB password from OCI Secrets (Vault)."""
+    if not ADW_PASSWORD_SECRET_OCID:
+        raise ValueError("ADW_PASSWORD_SECRET_OCID env var is required.")
+    cfg = {}
+    if OCI_REGION:
+        cfg["region"] = OCI_REGION
+    sc = oci.secrets.SecretsClient(config=cfg, signer=signer)
     bundle = sc.get_secret_bundle(ADW_PASSWORD_SECRET_OCID).data
-    # secret content is base64-encoded
-    content = bundle.secret_bundle_content.content
+    content = bundle.secret_bundle_content.content  # base64-encoded
     return base64.b64decode(content).decode("utf-8")
 
-# Keep a global pool across warm invocations
-POOL = None
 
 def _get_pool():
+    """Create/reuse a global oracledb pool for ADW (TLS, wallet-less)."""
     global POOL
-    if POOL:
+    if POOL is not None:
         return POOL
 
-    # Resource Principal signer (also used by Vault above)
-    signer = oci.auth.signers.get_resource_principals_signer()
-
     if not ADW_CONNECT_STRING:
-        raise ValueError("ADW_CONNECT_STRING env var is required (TLS connection descriptor from ADW).")
-    if not ADW_PASSWORD_SECRET_OCID:
-        raise ValueError("ADW_PASSWORD_SECRET_OCID env var is required (Vault secret OCID).")
+        raise ValueError("ADW_CONNECT_STRING env var is required (TLS connect descriptor).")
+    if not ADW_USER:
+        raise ValueError("ADW_USER env var is required.")
 
+    signer = oci.auth.signers.get_resource_principals_signer()
     db_password = _get_db_password(signer)
 
-    # Wallet-less TLS: pass the full (description=...) connect descriptor as 'dsn'
-    # Ensure ADW is set to allow TLS connections (not mutual TLS) and ACL allows your VCN/NAT.  See docs.
+    # python-oracledb Thin mode supports TLS with a full DSN (DESCRIPTION=...)
     POOL = oracledb.create_pool(
         user=ADW_USER,
         password=db_password,
         dsn=ADW_CONNECT_STRING,
-        min=1, max=4, increment=1
+        min=1,
+        max=4,
+        increment=1,
     )
     return POOL
 
+
+# =========================
+# SQL (idempotent insert)
+# =========================
 MERGE_SQL = """
 MERGE INTO CLOUDGUARD_APP.CLOUDGUARD_FINDINGS t
 USING (SELECT :event_id AS event_id FROM dual) s
@@ -134,13 +194,29 @@ WHEN NOT MATCHED THEN INSERT (
 )
 """
 
+
+# =========================
+# Function handler (Fn)
+# =========================
 def handler(ctx, data: io.BytesIO = None):
     try:
         body = data.getvalue().decode("utf-8") if data else "{}"
         payload = json.loads(body) if body else {}
+
+        # Normalize to list
         events = payload if isinstance(payload, list) else [payload]
 
-        rows = [flatten_row(ev) for ev in events]
+        # Keep only real Cloud Guard events that have a non-empty eventID
+        valid_events = [e for e in events if isinstance(e, dict) and _has_event_id(e)]
+        if not valid_events:
+            msg = "Skipped: no eventID in payload (likely a health/test call)."
+            logging.getLogger().info(msg)
+            return msg
+
+        # Flatten rows for DB
+        rows = [flatten_row(e) for e in valid_events]
+
+        # Insert/MERGE
         pool = _get_pool()
         with pool.acquire() as conn:
             with conn.cursor() as cur:
@@ -152,5 +228,5 @@ def handler(ctx, data: io.BytesIO = None):
         return msg
 
     except Exception as e:
-        logging.getLogger().error("ADW insert error: %s", e, exc_info=True)
+        logging.getLogger().error("ADW ingest error: %s", e, exc_info=True)
         return f"Error: {e}"
