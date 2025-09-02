@@ -257,3 +257,6 @@ while [ -n "$NEXT" ]; do
   echo "$RESP"
   NEXT=$(echo "$RESP" | python -c 'import sys,json; print(json.load(sys.stdin).get("next_start",""))')
 done
+
+Continuing from: state/last_processed_key.txt
+{"processed": 0, "next_start": "state/last_processed_key.txt", "last_key": "state/last_processed_key.txt", "done": true}
