@@ -22,8 +22,10 @@ def handler(ctx, data: io.BytesIO = None):
 
         # Use resource principal signer
         signer = oci.auth.signers.get_resource_principals_signer()
+        logging.getLogger().info("Signer: %s", signer) 
         object_storage = oci.object_storage.ObjectStorageClient(config={}, signer=signer)
         namespace = object_storage.get_namespace().data
+        logging.getLogger().info("Resolved Namespace: %s", namespace) 
 
         # ---- NEW: Check if bucket exists in compartment ----
         compartment_id = os.getenv("COMPARTMENT_OCID")  # Set this in function config
