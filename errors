@@ -262,3 +262,25 @@ Continuing from: state/last_processed_key.txt
 {"processed": 0, "next_start": "state/last_processed_key.txt", "last_key": "state/last_processed_key.txt", "done": true}
 
 echo -n "" | oci os object put -bn <YOUR_BUCKET> --name state/last_processed_key.txt --file /dev/stdin
+
+[opc@oci-admin-01 cloud_guard_processor]$ echo '{}' |DEBUG=1 fn invoke cloud-guard-processing-app cloud_guard_processor
+POST /20181201/functions/ocid1.fnfunc.oc1.iad.aaaaaaaaanek6owb3wzp6yiljtyp3fnmtgj6ywghigm524hpxb6s3fyjqvhq/actions/invoke HTTP/1.1
+Host: ob3xlmlev3a.us-ashburn-1.functions.oci.oraclecloud.com
+User-Agent: Go-http-client/1.1
+Content-Length: 3
+Content-Type: text/plain
+Accept-Encoding: gzip
+
+{}
+
+HTTP/1.1 200 OK
+Content-Length: 1241
+Content-Type: text/plain
+Date: Tue, 02 Sep 2025 14:00:13 GMT
+Fn-Call-Id: 01K45BMTS31BT1660ZJ01QWDBK
+Fn-Fdk-Runtime: python/3.9.20 final
+Fn-Fdk-Version: fdk-python/0.1.97
+Opc-Request-Id: /01K45BMTMM00000000003MA5JB/01K45BMTMM00000000003MA5JC
+
+Error: {'target_service': 'secrets', 'status': 404, 'code': 'NotAuthorizedOrNotFound', 'opc-request-id': '9BE06B7E89C54635B421A117884C850D/FF6C328DAC2FC33C6649AEE4112F187D/B531BB9545B7B4BE557F9456CF08E07B', 'message': 'Authorization failed or requested resource not found.', 'operation_name': 'get_secret_bundle', 'timestamp': '2025-09-02T14:00:13.606371+00:00', 'client_version': 'Oracle-PythonSDK/2.159.0', 'request_endpoint': 'GET https://secrets.vaults.us-ashburn-1.oci.oraclecloud.com/20190301/secretbundles/ocid1.vaultsecret.oc1.iad.amaaaaaa3vux2giaywlmnlxw5ryqzm5ixocuyhiqvsginocwdwdtovqjmxpa', 'logging_tips': 'To get more info on the failing request, refer to https://docs.oracle.com/en-us/iaas/tools/python/latest/logging.html for ways to log the request/response details.', 'troubleshooting_tips': "See https://docs.oracle.com/iaas/Content/API/References/apierrors.htm#apierrors_404__404_notauthorizedornotfound for more information about resolving this error. Also see https://docs.oracle.com/iaas/api/#/en/secretretrieval/20190301/SecretBundle/GetSecretBundle for details on this operation's requirements. If you are unable to resolve this secrets issue, please contact Oracle support and provide them this full error message."}
+Error: {'target_service': 'secrets', 'status': 404, 'code': 'NotAuthorizedOrNotFound', 'opc-request-id': '9BE06B7E89C54635B421A117884C850D/FF6C328DAC2FC33C6649AEE4112F187D/B531BB9545B7B4BE557F9456CF08E07B', 'message': 'Authorization failed or requested resource not found.', 'operation_name': 'get_secret_bundle', 'timestamp': '2025-09-02T14:00:13.606371+00:00', 'client_version': 'Oracle-PythonSDK/2.159.0', 'request_endpoint': 'GET https://secrets.vaults.us-ashburn-1.oci.oraclecloud.com/20190301/secretbundles/ocid1.vaultsecret.oc1.iad.amaaaaaa3vux2giaywlmnlxw5ryqzm5ixocuyhiqvsginocwdwdtovqjmxpa', 'logging_tips': 'To get more info on the failing request, refer to https://docs.oracle.com/en-us/iaas/tools/python/latest/logging.html for ways to log the request/response details.', 'troubleshooting_tips': "See https://docs.oracle.com/iaas/Content/API/References/apierrors.htm#apierrors_404__404_notauthorizedornotfound for more information about resolving this error. Also see https://docs.oracle.com/iaas/api/#/en/secretretrieval/20190301/SecretBundle/GetSecretBundle for details on this operation's requirements. If you are unable to resolve this secrets issue, please contact Oracle support and provide them this full error message."}
