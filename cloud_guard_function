@@ -80,8 +80,8 @@ def flatten_row(ev: dict) -> dict:
     addl = data.get("additionalDetails", {}) or {}
     exts = ev.get("extensions", {}) or {}
 
-    severity = (data.get("severity") or "").upper()
-    risk = (addl.get("riskLevel") or data.get("riskLevel") or "")
+    risk     = (addl.get("riskLevel") or data.get("riskLevel") or "")
+    severity = (data.get("severity") or risk or "").upper()
 
     # Build row
     return {
