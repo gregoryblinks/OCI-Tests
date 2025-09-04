@@ -67,3 +67,135 @@ UPDATE CLOUDGUARD_APP.CLOUDGUARD_FINDINGS
  WHERE SEVERITY_RANK IS NULL OR SEVERITY IS NULL;
 
 
+
+Canonicalize the event types (single source for the rest)
+
+CREATE OR REPLACE VIEW CLOUDGUARD_APP.CG_EVENTS_CANON AS
+SELECT
+  event_time,
+  UPPER(event_type) AS event_type_u,
+  CASE
+    WHEN UPPER(event_type) = 'COM.ORACLECLOUD.CLOUDGUARD.PROBLEMDETECTED'   THEN 'DETECTED'
+    WHEN UPPER(event_type) = 'COM.ORACLECLOUD.CLOUDGUARD.PROBLEMREMEDIATED' THEN 'REMEDIATED'
+    WHEN UPPER(event_type) = 'COM.ORACLECLOUD.CLOUDGUARD.PROBLEMDISMISSED'  THEN 'DISMISSED'
+    WHEN UPPER(event_type) = 'COM.ORACLECLOUD.CLOUDGUARD.SIGHTINGDETECTED'  THEN 'SIGHTING'
+    ELSE 'OTHER'
+  END AS event_kind,
+  problem_id,
+  lifecycle_state,
+  risk_level,
+  severity,
+  severity_rank,
+  compartment_name,
+  region
+FROM CLOUDGUARD_APP.CLOUDGUARD_FINDINGS;
+
+First time the problem was detected OPEN
+CREATE OR REPLACE VIEW CLOUDGUARD_APP.CG_DETECTED_OPEN AS
+SELECT
+  problem_id,
+  MIN(event_time) AS first_detected_time,
+  MAX(risk_level)       KEEP (DENSE_RANK FIRST ORDER BY event_time) AS risk_at_detection,
+  MAX(severity)         KEEP (DENSE_RANK FIRST ORDER BY event_time) AS severity_at_detection,
+  MAX(severity_rank)    KEEP (DENSE_RANK FIRST ORDER BY event_time) AS severity_rank_at_detection,
+  MAX(compartment_name) KEEP (DENSE_RANK FIRST ORDER BY event_time) AS compartment_name,
+  MAX(region)           KEEP (DENSE_RANK FIRST ORDER BY event_time) AS region
+FROM CLOUDGUARD_APP.CG_EVENTS_CANON
+WHERE event_kind = 'DETECTED'
+  AND UPPER(lifecycle_state) = 'OPEN'
+GROUP BY problem_id;
+
+Earliest explicit remediation and dismissal for that problem
+CREATE OR REPLACE VIEW CLOUDGUARD_APP.CG_REMEDIATED_BY_EVENT AS
+SELECT problem_id, MIN(event_time) AS remediated_time
+FROM   CLOUDGUARD_APP.CG_EVENTS_CANON
+WHERE  event_kind = 'REMEDIATED'
+GROUP  BY problem_id;
+
+CREATE OR REPLACE VIEW CLOUDGUARD_APP.CG_DISMISSED_BY_EVENT AS
+SELECT problem_id, MIN(event_time) AS dismissed_time
+FROM   CLOUDGUARD_APP.CG_EVENTS_CANON
+WHERE  event_kind = 'DISMISSED'
+GROUP  BY problem_id;
+
+(Optional) Sightings context (earliest sighting)
+CREATE OR REPLACE VIEW CLOUDGUARD_APP.CG_SIGHTING_FIRST AS
+SELECT problem_id, MIN(event_time) AS first_sighting_time
+FROM   CLOUDGUARD_APP.CG_EVENTS_CANON
+WHERE  event_kind = 'SIGHTING'
+GROUP  BY problem_id;
+
+Detection → Remediation/Dismissal alignment (with timings)
+CREATE OR REPLACE VIEW CLOUDGUARD_APP.CG_DETECT_VS_CLOSE AS
+SELECT
+  d.problem_id,
+  d.first_detected_time,
+  r.remediated_time,
+  x.dismissed_time,
+  -- first close event after detection (if any)
+  CASE
+    WHEN r.remediated_time IS NOT NULL AND x.dismissed_time IS NOT NULL
+      THEN LEAST(r.remediated_time, x.dismissed_time)
+    WHEN r.remediated_time IS NOT NULL THEN r.remediated_time
+    WHEN x.dismissed_time  IS NOT NULL THEN x.dismissed_time
+    ELSE NULL
+  END AS first_close_time,
+  CASE
+    WHEN r.remediated_time IS NOT NULL AND (x.dismissed_time IS NULL OR r.remediated_time <= x.dismissed_time)
+         AND r.remediated_time >= d.first_detected_time
+      THEN 'REMEDIATED'
+    WHEN x.dismissed_time IS NOT NULL AND (r.remediated_time IS NULL OR x.dismissed_time < r.remediated_time)
+         AND x.dismissed_time >= d.first_detected_time
+      THEN 'DISMISSED'
+    ELSE NULL
+  END AS closure_type,
+  CASE
+    WHEN r.remediated_time IS NOT NULL AND r.remediated_time >= d.first_detected_time THEN 'YES' ELSE 'NO'
+  END AS remediated_explicit,
+  CASE
+    WHEN (r.remediated_time IS NOT NULL AND r.remediated_time >= d.first_detected_time)
+      OR (x.dismissed_time  IS NOT NULL AND x.dismissed_time  >= d.first_detected_time)
+      THEN 'YES' ELSE 'NO'
+  END AS closed_either,  -- either remediated OR dismissed
+  CASE
+    WHEN r.remediated_time IS NOT NULL THEN ROUND( (CAST(r.remediated_time AS DATE) - CAST(d.first_detected_time AS DATE)), 4 )
+  END AS ttr_days,  -- time to remediate (explicit)
+  CASE
+    WHEN x.dismissed_time IS NOT NULL THEN ROUND( (CAST(x.dismissed_time AS DATE) - CAST(d.first_detected_time AS DATE)), 4 )
+  END AS ttd_days,  -- time to dismiss
+  d.risk_at_detection,
+  d.severity_at_detection,
+  d.severity_rank_at_detection,
+  d.compartment_name,
+  d.region
+FROM CLOUDGUARD_APP.CG_DETECTED_OPEN d
+LEFT JOIN CLOUDGUARD_APP.CG_REMEDIATED_BY_EVENT r ON r.problem_id = d.problem_id
+LEFT JOIN CLOUDGUARD_APP.CG_DISMISSED_BY_EVENT  x ON x.problem_id = d.problem_id;
+
+(Optional) Reopens after a close (quality signal)
+CREATE OR REPLACE VIEW CLOUDGUARD_APP.CG_DETECT_VS_CLOSE_REOPEN AS
+SELECT c.*,
+       CASE
+         WHEN c.first_close_time IS NOT NULL AND EXISTS (
+           SELECT 1
+           FROM CLOUDGUARD_APP.CG_EVENTS_CANON e
+           WHERE e.problem_id = c.problem_id
+             AND e.event_time > c.first_close_time
+             AND UPPER(e.lifecycle_state) = 'OPEN'
+         ) THEN 'YES' ELSE 'NO'
+       END AS reopened_after_close
+FROM CLOUDGUARD_APP.CG_DETECT_VS_CLOSE c;
+
+Daily cohort stats (detected vs closed types)
+CREATE OR REPLACE VIEW CLOUDGUARD_APP.CG_COHORT_DAILY AS
+SELECT
+  TRUNC(first_detected_time) AS day,
+  COUNT(*)                   AS problems_detected,
+  SUM(CASE WHEN remediated_explicit = 'YES' THEN 1 ELSE 0 END) AS remediated_explicit_cnt,
+  SUM(CASE WHEN closure_type = 'DISMISSED'   THEN 1 ELSE 0 END) AS dismissed_cnt,
+  SUM(CASE WHEN closed_either = 'YES'        THEN 1 ELSE 0 END) AS closed_either_cnt
+FROM CLOUDGUARD_APP.CG_DETECT_VS_CLOSE
+GROUP BY TRUNC(first_detected_time);
+
+
+
