@@ -221,154 +221,75 @@ FETCH FIRST 50 ROWS ONLY;
 
 
 CREATE OR REPLACE VIEW CLOUDGUARD_APP.CG_DETECT_VS_CLOSE AS
+WITH close_events AS (
+  SELECT e.problem_id, e.event_kind, e.event_time
+  FROM   CLOUDGUARD_APP.CG_EVENTS_CANON e
+  WHERE  e.event_kind IN ('REMEDIATED','DISMISSED')
+),
+agg AS (
+  SELECT
+    d.problem_id,
+    d.first_detected_time,
+    /* only close events on/after first detection */
+    MIN(CASE WHEN ce.event_kind = 'REMEDIATED' THEN ce.event_time END) AS remediated_time,
+    MIN(CASE WHEN ce.event_kind = 'DISMISSED'  THEN ce.event_time END) AS dismissed_time,
+    /* carry context */
+    d.risk_at_detection,
+    d.severity_at_detection,
+    d.severity_rank_at_detection,
+    d.compartment_name,
+    d.region
+  FROM CLOUDGUARD_APP.CG_DETECTED_OPEN d
+  LEFT JOIN close_events ce
+    ON ce.problem_id = d.problem_id
+   AND ce.event_time >= d.first_detected_time
+  GROUP BY
+    d.problem_id,
+    d.first_detected_time,
+    d.risk_at_detection,
+    d.severity_at_detection,
+    d.severity_rank_at_detection,
+    d.compartment_name,
+    d.region
+)
 SELECT
-  d.problem_id,
-  d.first_detected_time,
-
-  /* Earliest remediation AFTER (or at) first_detected_time */
-  ( SELECT MIN(e.event_time)
-    FROM   CLOUDGUARD_APP.CG_EVENTS_CANON e
-    WHERE  e.problem_id = d.problem_id
-       AND e.event_kind = 'REMEDIATED'
-       AND e.event_time >= d.first_detected_time
-  ) AS remediated_time,
-
-  /* Earliest dismissal AFTER (or at) first_detected_time */
-  ( SELECT MIN(e.event_time)
-    FROM   CLOUDGUARD_APP.CG_EVENTS_CANON e
-    WHERE  e.problem_id = d.problem_id
-       AND e.event_kind = 'DISMISSED'
-       AND e.event_time >= d.first_detected_time
-  ) AS dismissed_time,
-
-  /* First close event after detection (if any) */
+  a.problem_id,
+  a.first_detected_time,
+  a.remediated_time,
+  a.dismissed_time,
+  /* first close = earliest of the two (if any) */
   CASE
-    WHEN
-      ( SELECT MIN(e.event_time)
-        FROM CLOUDGUARD_APP.CG_EVENTS_CANON e
-        WHERE e.problem_id = d.problem_id
-          AND e.event_kind IN ('REMEDIATED','DISMISSED')
-          AND e.event_time >= d.first_detected_time
-      ) IS NOT NULL
-    THEN
-      ( SELECT MIN(e.event_time)
-        FROM CLOUDGUARD_APP.CG_EVENTS_CANON e
-        WHERE e.problem_id = d.problem_id
-          AND e.event_kind IN ('REMEDIATED','DISMISSED')
-          AND e.event_time >= d.first_detected_time
-      )
-    ELSE NULL
+    WHEN a.remediated_time IS NULL AND a.dismissed_time IS NULL THEN NULL
+    ELSE LEAST(
+           NVL(a.remediated_time, TIMESTAMP '9999-12-31 00:00:00'),
+           NVL(a.dismissed_time,  TIMESTAMP '9999-12-31 00:00:00')
+         )
   END AS first_close_time,
-
-  /* Closure type for the first close event */
+  /* closure type decided by which is earliest */
   CASE
-    WHEN
-      ( SELECT MIN(e.event_time)
-        FROM CLOUDGUARD_APP.CG_EVENTS_CANON e
-        WHERE e.problem_id = d.problem_id
-          AND e.event_kind = 'REMEDIATED'
-          AND e.event_time >= d.first_detected_time
-      ) IS NOT NULL
-      AND
-      ( SELECT MIN(e.event_time)
-        FROM CLOUDGUARD_APP.CG_EVENTS_CANON e
-        WHERE e.problem_id = d.problem_id
-          AND e.event_kind = 'REMEDIATED'
-          AND e.event_time >= d.first_detected_time
-      ) <=
-      NVL( ( SELECT MIN(e.event_time)
-             FROM CLOUDGUARD_APP.CG_EVENTS_CANON e
-             WHERE e.problem_id = d.problem_id
-               AND e.event_kind = 'DISMISSED'
-               AND e.event_time >= d.first_detected_time ), TIMESTAMP '9999-12-31 00:00:00' )
-    THEN 'REMEDIATED'
-
-    WHEN
-      ( SELECT MIN(e.event_time)
-        FROM CLOUDGUARD_APP.CG_EVENTS_CANON e
-        WHERE e.problem_id = d.problem_id
-          AND e.event_kind = 'DISMISSED'
-          AND e.event_time >= d.first_detected_time
-      ) IS NOT NULL
-      AND
-      ( SELECT MIN(e.event_time)
-        FROM CLOUDGUARD_APP.CG_EVENTS_CANON e
-        WHERE e.problem_id = d.problem_id
-          AND e.event_kind = 'DISMISSED'
-          AND e.event_time >= d.first_detected_time
-      ) <
-      NVL( ( SELECT MIN(e.event_time)
-             FROM CLOUDGUARD_APP.CG_EVENTS_CANON e
-             WHERE e.problem_id = d.problem_id
-               AND e.event_kind = 'REMEDIATED'
-               AND e.event_time >= d.first_detected_time ), TIMESTAMP '9999-12-31 00:00:00' )
-    THEN 'DISMISSED'
+    WHEN a.remediated_time IS NOT NULL
+     AND (a.dismissed_time IS NULL OR a.remediated_time <= a.dismissed_time)
+      THEN 'REMEDIATED'
+    WHEN a.dismissed_time  IS NOT NULL
+      THEN 'DISMISSED'
     ELSE NULL
   END AS closure_type,
+  /* flags */
+  CASE WHEN a.remediated_time IS NOT NULL THEN 'YES' ELSE 'NO' END AS remediated_explicit,
+  CASE WHEN a.remediated_time IS NOT NULL OR a.dismissed_time IS NOT NULL THEN 'YES' ELSE 'NO' END AS closed_either,
+  /* durations (days) */
+  CASE WHEN a.remediated_time IS NOT NULL
+       THEN ROUND(CAST(a.remediated_time AS DATE) - CAST(a.first_detected_time AS DATE), 4) END AS ttr_days,
+  CASE WHEN a.dismissed_time IS NOT NULL
+       THEN ROUND(CAST(a.dismissed_time  AS DATE) - CAST(a.first_detected_time AS DATE), 4) END AS ttd_days,
+  /* context */
+  a.risk_at_detection,
+  a.severity_at_detection,
+  a.severity_rank_at_detection,
+  a.compartment_name,
+  a.region
+FROM agg a;
 
-  /* Flags and durations (now aligned with the fenced timestamps) */
-  CASE WHEN
-    ( SELECT MIN(e.event_time)
-      FROM CLOUDGUARD_APP.CG_EVENTS_CANON e
-      WHERE e.problem_id = d.problem_id
-        AND e.event_kind = 'REMEDIATED'
-        AND e.event_time >= d.first_detected_time
-    ) IS NOT NULL
-  THEN 'YES' ELSE 'NO' END AS remediated_explicit,
-
-  CASE WHEN
-    ( SELECT MIN(e.event_time)
-      FROM CLOUDGUARD_APP.CG_EVENTS_CANON e
-      WHERE e.problem_id = d.problem_id
-        AND e.event_kind IN ('REMEDIATED','DISMISSED')
-        AND e.event_time >= d.first_detected_time
-    ) IS NOT NULL
-  THEN 'YES' ELSE 'NO' END AS closed_either,
-
-  CASE WHEN
-    ( SELECT MIN(e.event_time)
-      FROM CLOUDGUARD_APP.CG_EVENTS_CANON e
-      WHERE e.problem_id = d.problem_id
-        AND e.event_kind = 'REMEDIATED'
-        AND e.event_time >= d.first_detected_time
-    ) IS NOT NULL
-  THEN
-    ROUND( ( CAST(
-              ( SELECT MIN(e.event_time)
-                FROM CLOUDGUARD_APP.CG_EVENTS_CANON e
-                WHERE e.problem_id = d.problem_id
-                  AND e.event_kind = 'REMEDIATED'
-                  AND e.event_time >= d.first_detected_time
-              ) AS DATE )
-            - CAST(d.first_detected_time AS DATE) ), 4 )
-  END AS ttr_days,
-
-  CASE WHEN
-    ( SELECT MIN(e.event_time)
-      FROM CLOUDGUARD_APP.CG_EVENTS_CANON e
-      WHERE e.problem_id = d.problem_id
-        AND e.event_kind = 'DISMISSED'
-        AND e.event_time >= d.first_detected_time
-    ) IS NOT NULL
-  THEN
-    ROUND( ( CAST(
-              ( SELECT MIN(e.event_time)
-                FROM CLOUDGUARD_APP.CG_EVENTS_CANON e
-                WHERE e.problem_id = d.problem_id
-                  AND e.event_kind = 'DISMISSED'
-                  AND e.event_time >= d.first_detected_time
-              ) AS DATE )
-            - CAST(d.first_detected_time AS DATE) ), 4 )
-  END AS ttd_days,
-
-  /* carry context */
-  d.risk_at_detection,
-  d.severity_at_detection,
-  d.severity_rank_at_detection,
-  d.compartment_name,
-  d.region
-
-FROM CLOUDGUARD_APP.CG_DETECTED_OPEN d;
 
 
 
