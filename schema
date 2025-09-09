@@ -301,6 +301,10 @@ WHERE  remediated_time < first_detected_time
    OR  dismissed_time  < first_detected_time;
 
 
+-- Distinct problem names that were ever classified as CRITICAL
+SELECT DISTINCT problem_name
+FROM   CLOUDGUARD_APP.CLOUDGUARD_FINDINGS
+WHERE  UPPER(COALESCE(severity, risk_level)) = 'CRITICAL';
 
 
 
