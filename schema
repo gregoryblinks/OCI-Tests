@@ -213,5 +213,15 @@ GROUP BY TRUNC(first_detected_time);
 )
 
 
+SELECT problem_id, first_detected_time, remediated_time, dismissed_time
+FROM   CLOUDGUARD_APP.CG_DETECT_VS_CLOSE
+WHERE  remediated_time < first_detected_time
+   OR  dismissed_time  < first_detected_time
+FETCH FIRST 50 ROWS ONLY;
+
+
+
+
+
 
 
