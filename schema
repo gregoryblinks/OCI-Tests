@@ -308,5 +308,49 @@ WHERE  UPPER(COALESCE(severity, risk_level)) = 'CRITICAL';
 
 
 
+CREATE OR REPLACE VIEW CLOUDGUARD_APP.CG_COHORT_DAILY_SEV AS
+WITH base AS (
+  SELECT
+    TRUNC(first_detected_time)                                       AS day,
+    UPPER(NVL(severity_at_detection, risk_at_detection))             AS sev,
+    CASE WHEN remediated_time IS NOT NULL THEN 1 ELSE 0 END          AS rem_flg
+  FROM CLOUDGUARD_APP.CG_DETECT_VS_CLOSE
+),
+agg AS (
+  SELECT
+    day,
+    COUNT(*)                                                         AS detected_total,
+
+    /* detected by severity */
+    SUM(CASE WHEN sev = 'CRITICAL'                THEN 1 ELSE 0 END) AS detected_critical,
+    SUM(CASE WHEN sev IN ('HIGH','MAJOR')         THEN 1 ELSE 0 END) AS detected_high,
+    SUM(CASE WHEN sev IN ('MEDIUM','MODERATE')    THEN 1 ELSE 0 END) AS detected_medium,
+    SUM(CASE WHEN sev = 'LOW'                     THEN 1 ELSE 0 END) AS detected_low,
+    SUM(CASE WHEN sev = 'MINOR'                   THEN 1 ELSE 0 END) AS detected_minor,
+
+    /* remediated (explicit problemremediated) totals and by severity */
+    SUM(rem_flg)                                                     AS remediated_total,
+    SUM(CASE WHEN sev = 'CRITICAL'                THEN rem_flg ELSE 0 END) AS remediated_critical,
+    SUM(CASE WHEN sev IN ('HIGH','MAJOR')         THEN rem_flg ELSE 0 END) AS remediated_high,
+    SUM(CASE WHEN sev IN ('MEDIUM','MODERATE')    THEN rem_flg ELSE 0 END) AS remediated_medium,
+    SUM(CASE WHEN sev = 'LOW'                     THEN rem_flg ELSE 0 END) AS remediated_low,
+    SUM(CASE WHEN sev = 'MINOR'                   THEN rem_flg ELSE 0 END) AS remediated_minor
+  FROM base
+  GROUP BY day
+)
+SELECT
+  a.*,
+
+  /* overall remediation rate */
+  ROUND(a.remediated_total / NULLIF(a.detected_total,0), 4)                AS rate_total,
+
+  /* remediation rate by severity */
+  ROUND(a.remediated_critical / NULLIF(a.detected_critical,0), 4)          AS rate_critical,
+  ROUND(a.remediated_high     / NULLIF(a.detected_high,0), 4)              AS rate_high,
+  ROUND(a.remediated_medium   / NULLIF(a.detected_medium,0), 4)            AS rate_medium,
+  ROUND(a.remediated_low      / NULLIF(a.detected_low,0), 4)               AS rate_low,
+  ROUND(a.remediated_minor    / NULLIF(a.detected_minor,0), 4)             AS rate_minor
+FROM agg a;
+
 
 
