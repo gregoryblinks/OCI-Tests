@@ -353,4 +353,198 @@ SELECT
 FROM agg a;
 
 
+Top problem names with the lowest explicit remediation rate (require at least 5 detections to avoid noise):
+-- Top problem names with low remediation rate
+WITH cohort AS (
+  SELECT
+    c.problem_id,
+    c.first_detected_time,
+    c.remediated_time,
+    c.dismissed_time,
+    c.closure_type,
+    /* earliest non-null name at/after detection for this problem_id */
+    (SELECT MAX(f.problem_name) KEEP (
+       DENSE_RANK FIRST ORDER BY
+         CASE WHEN f.problem_name IS NULL
+              THEN TIMESTAMP '9999-12-31 00:00:00' ELSE f.event_time END)
+     FROM CLOUDGUARD_APP.CLOUDGUARD_FINDINGS f
+     WHERE f.problem_id = c.problem_id
+       AND f.event_time >= c.first_detected_time) AS problem_name
+  FROM CLOUDGUARD_APP.CG_DETECT_VS_CLOSE c
+)
+SELECT
+  problem_name,
+  COUNT(*) AS detected,
+  SUM(CASE WHEN remediated_time IS NOT NULL THEN 1 ELSE 0 END) AS remediated,
+  SUM(CASE WHEN closure_type = 'DISMISSED' THEN 1 ELSE 0 END) AS dismissed,
+  SUM(CASE WHEN remediated_time IS NULL AND NVL(closure_type,'') <> 'DISMISSED' THEN 1 ELSE 0 END) AS still_open,
+  ROUND( SUM(CASE WHEN remediated_time IS NOT NULL THEN 1 ELSE 0 END) / NULLIF(COUNT(*),0), 4) AS remediation_rate,
+  ROUND( SUM(CASE WHEN closure_type = 'DISMISSED' THEN 1 ELSE 0 END) / NULLIF(COUNT(*),0), 4) AS dismissal_rate
+FROM cohort
+GROUP BY problem_name
+HAVING COUNT(*) >= 5
+ORDER BY remediation_rate ASC, detected DESC
+FETCH FIRST 20 ROWS ONLY;
+
+
+Interpretation
+1.  remediation_rate low → these problem names are the ones “mostly not remediated”.
+2.  Check dismissal_rate vs still_open to see whether they’re being dismissed or just lingering open.
+
+
+2) Why? (diagnose a specific problem name)
+👉 Replace :pname with the problem name you want to analyze.
+
+2A. Outcome split (remediated vs dismissed vs still open)
+WITH cohort AS (
+  SELECT c.*
+  FROM   CLOUDGUARD_APP.CG_DETECT_VS_CLOSE c
+  WHERE EXISTS (
+    SELECT 1
+    FROM   CLOUDGUARD_APP.CLOUDGUARD_FINDINGS f
+    WHERE  f.problem_id = c.problem_id
+      AND  f.event_time >= c.first_detected_time
+      AND  f.problem_name = :pname
+  )
+)
+SELECT 'REMEDIATED' AS outcome, COUNT(*) AS cnt
+FROM   cohort
+WHERE  remediated_time IS NOT NULL
+UNION ALL
+SELECT 'DISMISSED', COUNT(*)
+FROM   cohort
+WHERE  closure_type = 'DISMISSED'
+UNION ALL
+SELECT 'STILL_OPEN', COUNT(*)
+FROM   cohort
+WHERE  remediated_time IS NULL AND NVL(closure_type,'') <> 'DISMISSED';
+
+
+2B) By severity/risk at detection (non-remediated only)
+WITH cohort AS (
+  SELECT c.*
+  FROM   CLOUDGUARD_APP.CG_DETECT_VS_CLOSE c
+  WHERE EXISTS (
+    SELECT 1 FROM CLOUDGUARD_APP.CLOUDGUARD_FINDINGS f
+    WHERE  f.problem_id = c.problem_id
+      AND  f.event_time >= c.first_detected_time
+      AND  f.problem_name = :pname
+  )
+)
+SELECT
+  UPPER(NVL(severity_at_detection, risk_at_detection)) AS severity_bucket,
+  COUNT(*) AS detected,
+  SUM(CASE WHEN remediated_time IS NULL AND NVL(closure_type,'') <> 'DISMISSED' THEN 1 ELSE 0 END) AS still_open,
+  SUM(CASE WHEN closure_type = 'DISMISSED' THEN 1 ELSE 0 END) AS dismissed,
+  ROUND(
+    SUM(CASE WHEN remediated_time IS NOT NULL THEN 1 END)
+    / NULLIF(COUNT(*),0), 4
+  ) AS remediation_rate
+FROM cohort
+GROUP BY UPPER(NVL(severity_at_detection, risk_at_detection))
+ORDER BY remediation_rate ASC, detected DESC;
+
+
+2C) Top compartments where it’s not remediated
+WITH cohort AS (
+  SELECT c.*
+  FROM   CLOUDGUARD_APP.CG_DETECT_VS_CLOSE c
+  WHERE EXISTS (
+    SELECT 1 FROM CLOUDGUARD_APP.CLOUDGUARD_FINDINGS f
+    WHERE  f.problem_id = c.problem_id
+      AND  f.event_time >= c.first_detected_time
+      AND  f.problem_name = :pname
+  )
+)
+SELECT
+  compartment_name,
+  COUNT(*) AS detected,
+  SUM(CASE WHEN remediated_time IS NOT NULL THEN 1 ELSE 0 END) AS remediated,
+  SUM(CASE WHEN closure_type = 'DISMISSED' THEN 1 ELSE 0 END) AS dismissed,
+  SUM(CASE WHEN remediated_time IS NULL AND NVL(closure_type,'') <> 'DISMISSED' THEN 1 ELSE 0 END) AS still_open,
+  ROUND(
+    SUM(CASE WHEN remediated_time IS NOT NULL THEN 1 END)
+    / NULLIF(COUNT(*),0), 4
+  ) AS remediation_rate
+FROM cohort
+GROUP BY compartment_name
+HAVING COUNT(*) >= 3
+ORDER BY remediation_rate ASC, detected DESC
+FETCH FIRST 10 ROWS ONLY;
+
+2D) Top resource types where it’s not remediated
+WITH cohort AS (
+  SELECT
+    c.*,
+    /* earliest non-null resource_type after detection */
+    (SELECT MAX(f.resource_type) KEEP (
+       DENSE_RANK FIRST ORDER BY
+         CASE WHEN f.resource_type IS NULL
+              THEN TIMESTAMP '9999-12-31 00:00:00' ELSE f.event_time END)
+     FROM CLOUDGUARD_APP.CLOUDGUARD_FINDINGS f
+     WHERE f.problem_id = c.problem_id
+       AND f.event_time >= c.first_detected_time) AS resource_type_at_detection
+  FROM CLOUDGUARD_APP.CG_DETECT_VS_CLOSE c
+  WHERE EXISTS (
+    SELECT 1 FROM CLOUDGUARD_APP.CLOUDGUARD_FINDINGS f
+    WHERE  f.problem_id = c.problem_id
+      AND  f.event_time >= c.first_detected_time
+      AND  f.problem_name = :pname
+  )
+)
+SELECT
+  resource_type_at_detection AS resource_type,
+  COUNT(*) AS detected,
+  SUM(CASE WHEN remediated_time IS NOT NULL THEN 1 ELSE 0 END) AS remediated,
+  SUM(CASE WHEN closure_type = 'DISMISSED' THEN 1 ELSE 0 END) AS dismissed,
+  SUM(CASE WHEN remediated_time IS NULL AND NVL(closure_type,'') <> 'DISMISSED' THEN 1 ELSE 0 END) AS still_open,
+  ROUND(
+    SUM(CASE WHEN remediated_time IS NOT NULL THEN 1 END)
+    / NULLIF(COUNT(*),0), 4
+  ) AS remediation_rate
+FROM cohort
+GROUP BY resource_type_at_detection
+HAVING COUNT(*) >= 3
+ORDER BY remediation_rate ASC, detected DESC
+FETCH FIRST 10 ROWS ONLY;
+
+
+3) One query to rank “non-remediated” drivers across all problems
+This ranks the combinations of (problem_name, severity_bucket, compartment) where remediation is lowest (and volume ≥ 5):
+
+WITH cohort AS (
+  SELECT
+    c.problem_id,
+    c.first_detected_time,
+    c.remediated_time,
+    c.closure_type,
+    UPPER(NVL(c.severity_at_detection, c.risk_at_detection)) AS severity_bucket,
+    c.compartment_name,
+    (SELECT MAX(f.problem_name) KEEP (
+       DENSE_RANK FIRST ORDER BY
+         CASE WHEN f.problem_name IS NULL
+              THEN TIMESTAMP '9999-12-31 00:00:00' ELSE f.event_time END)
+     FROM CLOUDGUARD_APP.CLOUDGUARD_FINDINGS f
+     WHERE f.problem_id = c.problem_id
+       AND f.event_time >= c.first_detected_time) AS problem_name
+  FROM CLOUDGUARD_APP.CG_DETECT_VS_CLOSE c
+)
+SELECT
+  problem_name,
+  severity_bucket,
+  compartment_name,
+  COUNT(*) AS detected,
+  SUM(CASE WHEN remediated_time IS NOT NULL THEN 1 ELSE 0 END) AS remediated,
+  SUM(CASE WHEN closure_type = 'DISMISSED' THEN 1 ELSE 0 END) AS dismissed,
+  SUM(CASE WHEN remediated_time IS NULL AND NVL(closure_type,'') <> 'DISMISSED' THEN 1 ELSE 0 END) AS still_open,
+  ROUND( SUM(CASE WHEN remediated_time IS NOT NULL THEN 1 ELSE 0 END) / NULLIF(COUNT(*),0), 4) AS remediation_rate
+FROM cohort
+GROUP BY problem_name, severity_bucket, compartment_name
+HAVING COUNT(*) >= 5
+ORDER BY remediation_rate ASC, detected DESC
+FETCH FIRST 20 ROWS ONLY;
+
+
+Use this to answer “why”:
+Look at the lowest-rate rows—do they cluster in certain compartments, risks, or resource types? That’s your remediation bottleneck.
 
