@@ -544,7 +544,53 @@ HAVING COUNT(*) >= 5
 ORDER BY remediation_rate ASC, detected DESC
 FETCH FIRST 20 ROWS ONLY;
 
-
 Use this to answer “why”:
 Look at the lowest-rate rows—do they cluster in certain compartments, risks, or resource types? That’s your remediation bottleneck.
+
+One helper view (copy–paste in ADW)
+  This wraps your fixed cohort view and adds:
+  PROBLEM_NAME (at/after first detection),
+  RESOURCE_TYPE (at/after first detection),
+  SEVERITY_BUCKET (uses SEVERITY_AT_DETECTION fallback RISK_AT_DETECTION).
+
+CREATE OR REPLACE VIEW CLOUDGUARD_APP.CG_DETECT_VS_CLOSE_NAMED AS
+SELECT
+  c.problem_id,
+  c.first_detected_time,
+  c.remediated_time,
+  c.dismissed_time,
+  c.first_close_time,
+  c.closure_type,
+  c.remediated_explicit,
+  c.closed_either,
+  c.ttr_days,
+  c.ttd_days,
+  c.risk_at_detection,
+  c.severity_at_detection,
+  c.severity_rank_at_detection,
+  c.compartment_name,
+  c.region,
+  /* derived */
+  UPPER(NVL(c.severity_at_detection, c.risk_at_detection)) AS severity_bucket,
+
+  /* earliest non-null name after detection */
+  (SELECT MAX(f.problem_name) KEEP (
+     DENSE_RANK FIRST ORDER BY
+       CASE WHEN f.problem_name IS NULL
+            THEN TIMESTAMP '9999-12-31 00:00:00' ELSE f.event_time END)
+   FROM CLOUDGUARD_APP.CLOUDGUARD_FINDINGS f
+   WHERE f.problem_id = c.problem_id
+     AND f.event_time >= c.first_detected_time) AS problem_name,
+
+  /* earliest non-null resource_type after detection */
+  (SELECT MAX(f.resource_type) KEEP (
+     DENSE_RANK FIRST ORDER BY
+       CASE WHEN f.resource_type IS NULL
+            THEN TIMESTAMP '9999-12-31 00:00:00' ELSE f.event_time END)
+   FROM CLOUDGUARD_APP.CLOUDGUARD_FINDINGS f
+   WHERE f.problem_id = c.problem_id
+     AND f.event_time >= c.first_detected_time) AS resource_type
+
+FROM CLOUDGUARD_APP.CG_DETECT_VS_CLOSE c;
+
 
