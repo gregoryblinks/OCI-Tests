@@ -593,7 +593,7 @@ SELECT
 
 FROM CLOUDGUARD_APP.CG_DETECT_VS_CLOSE c;
 
-
+One unified list with a STATUS column
 SELECT
   c.problem_id,
   (SELECT MAX(f.problem_name) KEEP (
