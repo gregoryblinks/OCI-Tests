@@ -594,3 +594,40 @@ SELECT
 FROM CLOUDGUARD_APP.CG_DETECT_VS_CLOSE c;
 
 
+SELECT
+  c.problem_id,
+  (SELECT MAX(f.problem_name) KEEP (
+           DENSE_RANK FIRST ORDER BY
+             CASE WHEN f.problem_name IS NULL
+                  THEN TIMESTAMP '9999-12-31 00:00:00' ELSE f.event_time END)
+     FROM CLOUDGUARD_APP.CLOUDGUARD_FINDINGS f
+     WHERE f.problem_id = c.problem_id
+       AND f.event_time >= c.first_detected_time) AS problem_name,
+  c.first_detected_time,
+  c.remediated_time,
+  c.dismissed_time,
+  CASE
+    WHEN c.remediated_time IS NOT NULL THEN 'REMEDIATED'
+    WHEN c.closure_type = 'DISMISSED'  THEN 'DISMISSED'
+    ELSE 'OPEN'
+  END AS status,
+  /* handy metrics */
+  CASE WHEN c.remediated_time IS NOT NULL
+       THEN ROUND(CAST(c.remediated_time AS DATE) - CAST(c.first_detected_time AS DATE), 4)
+  END AS ttr_days,
+  CASE WHEN c.remediated_time IS NULL AND NVL(c.closure_type,'') <> 'DISMISSED'
+       THEN ROUND(CAST(SYSTIMESTAMP AS DATE) - CAST(c.first_detected_time AS DATE), 4)
+  END AS open_age_days,
+  UPPER(NVL(c.severity_at_detection, c.risk_at_detection)) AS severity_bucket,
+  c.compartment_name,
+  c.region
+FROM CLOUDGUARD_APP.CG_DETECT_VS_CLOSE c
+-- Optional date filter:
+-- WHERE c.first_detected_time >= ADD_MONTHS(TRUNC(SYSDATE), -3)
+ORDER BY
+  CASE
+    WHEN c.remediated_time IS NULL AND NVL(c.closure_type,'') <> 'DISMISSED' THEN 1  -- OPEN first
+    WHEN c.closure_type = 'DISMISSED' THEN 2
+    ELSE 3
+  END,
+  c.first_detected_time DESC;
