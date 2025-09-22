@@ -714,3 +714,90 @@ ORDER BY
     ELSE 3
   END,
   c.first_detected_time DESC;
+####################################
+SELECT
+  TRUNC(CAST(FROM_TZ(event_time, 'UTC') AT TIME ZONE 'Europe/Berlin' AS DATE)) AS day_local,
+  COUNT(DISTINCT CASE
+    WHEN UPPER(event_type) = 'COM.ORACLECLOUD.CLOUDGUARD.PROBLEMDETECTED'
+    THEN problem_id END) AS detected_problems,
+  COUNT(DISTINCT CASE
+    WHEN UPPER(event_type) = 'COM.ORACLECLOUD.CLOUDGUARD.PROBLEMREMEDIATED'
+    THEN problem_id END) AS remediated_problems
+FROM CLOUDGUARD_APP.CLOUDGUARD_FINDINGS
+WHERE UPPER(event_type) IN (
+  'COM.ORACLECLOUD.CLOUDGUARD.PROBLEMDETECTED',
+  'COM.ORACLECLOUD.CLOUDGUARD.PROBLEMREMEDIATED'
+)
+GROUP BY TRUNC(CAST(FROM_TZ(event_time, 'UTC') AT TIME ZONE 'Europe/Berlin' AS DATE))
+ORDER BY day_local;
+#####################################
+CREATE OR REPLACE VIEW CLOUDGUARD_APP.CG_DETECTED_WITH_RESOLUTION AS
+WITH detected AS (
+  /* First time each problem was detected (OPEN) */
+  SELECT problem_id, MIN(event_time) AS first_detected_time
+  FROM   CLOUDGUARD_APP.CLOUDGUARD_FINDINGS
+  WHERE  UPPER(event_type) = 'COM.ORACLECLOUD.CLOUDGUARD.PROBLEMDETECTED'
+  GROUP  BY problem_id
+),
+aug AS (
+  SELECT
+    d.problem_id,
+    d.first_detected_time,
+
+    /* Friendly name at/after detection (earliest non-null) */
+    ( SELECT MAX(f.problem_name) KEEP (
+             DENSE_RANK FIRST ORDER BY
+               CASE WHEN f.problem_name IS NULL
+                    THEN TIMESTAMP '9999-12-31 00:00:00' ELSE f.event_time END)
+      FROM CLOUDGUARD_APP.CLOUDGUARD_FINDINGS f
+      WHERE f.problem_id = d.problem_id
+        AND f.event_time >= d.first_detected_time
+    ) AS problem_name,
+
+    /* First remediation AFTER (or at) detection */
+    ( SELECT MIN(f.event_time)
+      FROM   CLOUDGUARD_APP.CLOUDGUARD_FINDINGS f
+      WHERE  f.problem_id = d.problem_id
+        AND  UPPER(f.event_type) = 'COM.ORACLECLOUD.CLOUDGUARD.PROBLEMREMEDIATED'
+        AND  f.event_time >= d.first_detected_time
+    ) AS remediated_time,
+
+    /* First dismissal AFTER (or at) detection */
+    ( SELECT MIN(f.event_time)
+      FROM   CLOUDGUARD_APP.CLOUDGUARD_FINDINGS f
+      WHERE  f.problem_id = d.problem_id
+        AND  UPPER(f.event_type) = 'COM.ORACLECLOUD.CLOUDGUARD.PROBLEMDISMISSED'
+        AND  f.event_time >= d.first_detected_time
+    ) AS dismissed_time
+  FROM detected d
+)
+SELECT
+  problem_id,
+  problem_name,
+  first_detected_time,
+  remediated_time,
+  dismissed_time,
+
+  /* Status label */
+  CASE
+    WHEN remediated_time IS NOT NULL
+         AND (dismissed_time IS NULL OR remediated_time <= dismissed_time)
+      THEN 'REMEDIATED'
+    WHEN dismissed_time IS NOT NULL
+      THEN 'DISMISSED'
+    ELSE 'OPEN'
+  END AS status,
+
+  /* Time to Resolve (days) */
+  CASE WHEN remediated_time IS NOT NULL
+       THEN ROUND(CAST(remediated_time AS DATE) - CAST(first_detected_time AS DATE), 4)
+  END AS ttr_days,
+
+  /* Current open age (days) if still open */
+  CASE WHEN remediated_time IS NULL AND dismissed_time IS NULL
+       THEN ROUND(CAST(SYSTIMESTAMP AS DATE) - CAST(first_detected_time AS DATE), 4)
+  END AS open_age_days
+
+FROM aug;
+
+#####################################
