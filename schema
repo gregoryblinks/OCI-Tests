@@ -801,3 +801,14 @@ SELECT
 FROM aug;
 
 #####################################
+-- Returns rows?
+SELECT * FROM CLOUDGUARD_APP.CG_DETECTED_WITH_RESOLUTION
+FETCH FIRST 10 ROWS ONLY;
+
+-- Any anomalies (should be 0)?
+SELECT COUNT(*) bad_rows
+FROM   CLOUDGUARD_APP.CG_DETECTED_WITH_RESOLUTION
+WHERE  remediated_time < first_detected_time
+   OR  dismissed_time  < first_detected_time;
+####################################
+
