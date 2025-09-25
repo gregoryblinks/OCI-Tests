@@ -921,8 +921,21 @@ SELECT
     NULLIF(TRIM(DBMS_LOB.SUBSTR(TO_CLOB(f.problem_description), 4000)), '')
   ) AS remediation_reason,
 
-  /* NEW: full additionalDetails JSON (as text, up to 4000 chars) */
-  JSON_QUERY(f.RAW_JSON, '$.data.additionalDetails' RETURNING VARCHAR2(4000)) AS additional_details,
+  /* ---- additionalDetails (parsed columns) ---- */
+  JSON_VALUE(f.ADDITIONAL_DETAILS_JSON, '$.status'            RETURNING VARCHAR2(100))   AS addl_status,
+  JSON_VALUE(f.ADDITIONAL_DETAILS_JSON, '$.riskLevel'         RETURNING VARCHAR2(100))   AS addl_risk_level,
+  JSON_VALUE(f.ADDITIONAL_DETAILS_JSON, '$.problemType'       RETURNING VARCHAR2(200))   AS addl_problem_type,
+  JSON_VALUE(f.ADDITIONAL_DETAILS_JSON, '$.problemName'       RETURNING VARCHAR2(400))   AS addl_problem_name,
+  JSON_VALUE(f.ADDITIONAL_DETAILS_JSON, '$.resourceName'      RETURNING VARCHAR2(4000))  AS addl_resource_name,
+  JSON_VALUE(f.ADDITIONAL_DETAILS_JSON, '$.resourceId'        RETURNING VARCHAR2(4000))  AS addl_resource_id,
+  JSON_VALUE(f.ADDITIONAL_DETAILS_JSON, '$.resourceType'      RETURNING VARCHAR2(400))   AS addl_resource_type,
+  JSON_VALUE(f.ADDITIONAL_DETAILS_JSON, '$.targetId'          RETURNING VARCHAR2(4000))  AS addl_target_id,
+  JSON_VALUE(f.ADDITIONAL_DETAILS_JSON, '$.labels'            RETURNING VARCHAR2(4000))  AS addl_labels,
+  JSON_VALUE(f.ADDITIONAL_DETAILS_JSON, '$.region'            RETURNING VARCHAR2(200))   AS addl_region,
+
+  /* nested object: problemAdditionalDetails.comments */
+  JSON_VALUE(f.ADDITIONAL_DETAILS_JSON, '$.problemAdditionalDetails.comments'
+             RETURNING VARCHAR2(4000)) AS problem_additional_comments,
 
   /* Time-to-resolve (days) */
   CASE WHEN d.first_detected_time IS NOT NULL
