@@ -811,4 +811,49 @@ FROM   CLOUDGUARD_APP.CG_DETECTED_WITH_RESOLUTION
 WHERE  remediated_time < first_detected_time
    OR  dismissed_time  < first_detected_time;
 ####################################
+SELECT column_name
+FROM   all_tab_columns
+WHERE  owner='CLOUDGUARD_APP'
+  AND  table_name='CLOUDGUARD_FINDINGS'
+  AND  column_name IN (
+    'REASON','COMMENTS','COMMENT',
+    'PROBLEM_RECOMMENDATION','PROBLEM_DESCRIPTION',
+    'RESPONDER_ACTION','RESPONDER_RULE_NAME',
+    'RAW_JSON','PAYLOAD_JSON'
+  )
+ORDER BY column_name;
+
+
+WITH rem AS (
+  /* First remediation time per problem */
+  SELECT problem_id,
+         MIN(event_time) AS remediated_time
+  FROM   CLOUDGUARD_APP.CLOUDGUARD_FINDINGS
+  WHERE  UPPER(event_type) = 'COM.ORACLECLOUD.CLOUDGUARD.PROBLEMREMEDIATED'
+  GROUP  BY problem_id
+)
+SELECT
+  r.problem_id,
+  fr.problem_name,
+  r.remediated_time,
+  /* pick best available reason/comment text on the remediation row */
+  COALESCE(
+    NULLIF(TRIM(fr.reason), ''),
+    NULLIF(TRIM(fr.comments), ''),
+    NULLIF(TRIM(fr.comment), ''),
+    NULLIF(TRIM(fr.responder_action), ''),
+    NULLIF(TRIM(fr.responder_rule_name), ''),
+    NULLIF(TRIM(fr.problem_recommendation), ''),
+    NULLIF(TRIM(fr.problem_description), '')
+  ) AS remediation_reason
+FROM rem r
+JOIN CLOUDGUARD_APP.CLOUDGUARD_FINDINGS fr
+  ON fr.problem_id = r.problem_id
+ AND fr.event_time = r.remediated_time
+ AND UPPER(fr.event_type) = 'COM.ORACLECLOUD.CLOUDGUARD.PROBLEMREMEDIATED'
+ORDER BY r.remediated_time DESC;
+
+
+CREATE OR REPLACE VIEW CLOUDGUARD_APP.CG_REMEDIATED_WITH_REASON AS
+/* paste the SELECT from Variant A or Variant B here (without the ORDER BY) */;
 
