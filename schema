@@ -895,3 +895,45 @@ WHERE  owner='CLOUDGUARD_APP'
 
 -- Should now return rows without ORA-00932
 SELECT * FROM CLOUDGUARD_APP.CG_REMEDIATED_WITH_REASON FETCH FIRST 5 ROWS ONLY;
+
+
+WITH rem AS (
+  SELECT problem_id, MIN(event_time) AS remediated_time
+  FROM   CLOUDGUARD_APP.CLOUDGUARD_FINDINGS
+  WHERE  UPPER(event_type) = 'COM.ORACLECLOUD.CLOUDGUARD.PROBLEMREMEDIATED'
+  GROUP  BY problem_id
+),
+det AS (
+  SELECT problem_id, MIN(event_time) AS first_detected_time
+  FROM   CLOUDGUARD_APP.CLOUDGUARD_FINDINGS
+  WHERE  UPPER(event_type) = 'COM.ORACLECLOUD.CLOUDGUARD.PROBLEMDETECTED'
+  GROUP  BY problem_id
+)
+SELECT
+  r.problem_id,
+  f.problem_name,
+  d.first_detected_time,
+  r.remediated_time,
+
+  /* Prefer REASON; fallback PROBLEM_DESCRIPTION — normalize CLOBs to VARCHAR2 */
+  COALESCE(
+    NULLIF(TRIM(DBMS_LOB.SUBSTR(TO_CLOB(f.reason),              4000)), ''),
+    NULLIF(TRIM(DBMS_LOB.SUBSTR(TO_CLOB(f.problem_description), 4000)), '')
+  ) AS remediation_reason,
+
+  /* NEW: full additionalDetails JSON (as text, up to 4000 chars) */
+  JSON_QUERY(f.RAW_JSON, '$.data.additionalDetails' RETURNING VARCHAR2(4000)) AS additional_details,
+
+  /* Time-to-resolve (days) */
+  CASE WHEN d.first_detected_time IS NOT NULL
+       THEN ROUND(CAST(r.remediated_time AS DATE) - CAST(d.first_detected_time AS DATE), 4)
+  END AS ttr_days
+
+FROM rem r
+JOIN CLOUDGUARD_APP.CLOUDGUARD_FINDINGS f
+  ON f.problem_id = r.problem_id
+ AND f.event_time = r.remediated_time
+ AND UPPER(f.event_type) = 'COM.ORACLECLOUD.CLOUDGUARD.PROBLEMREMEDIATED'
+LEFT JOIN det d
+  ON d.problem_id = r.problem_id
+ORDER BY r.remediated_time DESC;
