@@ -896,7 +896,7 @@ WHERE  owner='CLOUDGUARD_APP'
 -- Should now return rows without ORA-00932
 SELECT * FROM CLOUDGUARD_APP.CG_REMEDIATED_WITH_REASON FETCH FIRST 5 ROWS ONLY;
 
-
+CREATE OR REPLACE VIEW CLOUDGUARD_APP.CG_REMEDIATED_WITH_REASON AS
 WITH rem AS (
   SELECT problem_id, MIN(event_time) AS remediated_time
   FROM   CLOUDGUARD_APP.CLOUDGUARD_FINDINGS
@@ -948,5 +948,6 @@ JOIN CLOUDGUARD_APP.CLOUDGUARD_FINDINGS f
  AND f.event_time = r.remediated_time
  AND UPPER(f.event_type) = 'COM.ORACLECLOUD.CLOUDGUARD.PROBLEMREMEDIATED'
 LEFT JOIN det d
-  ON d.problem_id = r.problem_id
+  ON d.problem_id = r.problem_id;
+
 ORDER BY r.remediated_time DESC;
