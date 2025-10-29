@@ -42,8 +42,9 @@ oci.circuit_breaker.NoCircuitBreakerStrategy()
 # ---------------------------------------------------------------------------
 # HARDENING ADDITIONS:
 # 1) Retry/backoff around DeleteAny for transient errors.
-# 2) Special-case ONS subscriptions: delete via topics->subscriptions even if SDK lacks list_subscriptions (REST fallback).
-# 3) Special-case Blockstorage volume_backup_policy_assignment: delete per-asset (volumes & boot volumes).
+# 2) Special-case ONS subscriptions: delete via topics->subscriptions.
+#    Adds REST fallback for SDK variants that lack list_subscriptions.
+# 3) Special-case Blockstorage volume_backup_policy_assignment: delete per-asset.
 # ---------------------------------------------------------------------------
 try:
     _DeleteAnyRaw = DeleteAny
@@ -51,10 +52,9 @@ try:
     # -- ONS fallbacks for SDKs missing list_subscriptions --
     def _list_ons_subscriptions(client, compartment_id, topic_id):
         """
-        Return a list of lightweight objects with .id for subscriptions on topic_id.
-        Tries client.list_subscriptions; if missing, falls back to REST.
+        Return a list of objects with .id for subscriptions on topic_id.
+        Prefer SDK method; fall back to REST /20181201/subscriptions if missing.
         """
-        # Preferred: normal SDK method if present
         if hasattr(client, "list_subscriptions"):
             return oci.pagination.list_call_get_all_results(
                 client.list_subscriptions,
@@ -63,7 +63,7 @@ try:
                 retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY
             ).data
 
-        # Fallback: direct REST call
+        # REST fallback
         try:
             import json
             resp = client.base_client.call_api(
@@ -75,20 +75,18 @@ try:
             if isinstance(payload, (bytes, bytearray)):
                 payload = json.loads(payload.decode("utf-8"))
             items = payload.get("items", [])
-            # Normalize to objects with .id so the rest of the code can stay the same
             class _SubObj:
                 __slots__ = ("id",)
                 def __init__(self, _id): self.id = _id
             return [_SubObj(it.get("id")) for it in items if it.get("id")]
         except Exception as e:
             print(f"[ons-subscriptions] Fallback list failed: {e}")
-            return []  # Let topic deletion proceed; subs will be handled by service if possible
+            return []
 
     def _delete_ons_subscription(client, subscription_id):
         """Delete subscription using SDK if available, else REST fallback."""
         if hasattr(client, "delete_subscription"):
             return client.delete_subscription(subscription_id=subscription_id)
-        # REST fallback
         return client.base_client.call_api(
             resource_path=f"/20181201/subscriptions/{subscription_id}",
             method="DELETE"
@@ -100,7 +98,6 @@ try:
             comp_id = getattr(comp, "id", None) or getattr(getattr(comp, "details", None), "id", None)
             if not comp_id:
                 continue
-            # List topics in this compartment
             topics = oci.pagination.list_call_get_all_results(
                 client.list_topics,
                 compartment_id=comp_id,
@@ -110,7 +107,6 @@ try:
                 topic_id = getattr(t, "id", None) or getattr(t, "topic_id", None)
                 if not topic_id:
                     continue
-                # List subs with SDK if available, else via REST fallback
                 subs = _list_ons_subscriptions(client, comp_id, topic_id)
                 for s in subs:
                     sub_id = getattr(s, "id", None) or getattr(s, "subscription_id", None)
@@ -123,13 +119,12 @@ try:
                             continue
                         raise
                     except Exception as e:
-                        # Non-fatal: log and continue so topic deletion can proceed
                         print(f"[ons-subscriptions] delete failed for {sub_id}: {e}")
                         continue
 
     def _delete_block_vol_backup_policy_assignments(config, signer, processCompartments):
         bclient = oci.core.BlockstorageClient(config, signer=signer)
-        # We need ADs to list boot volumes
+        # Need ADs for boot volumes
         try:
             iclient = oci.identity.IdentityClient(config, signer=signer)
             ads = iclient.list_availability_domains(compartment_id=config["tenancy"]).data
@@ -142,7 +137,7 @@ try:
             if not comp_id:
                 continue
 
-            # Volumes (no AD required)
+            # Volumes
             volumes = oci.pagination.list_call_get_all_results(
                 bclient.list_volumes,
                 compartment_id=comp_id,
@@ -150,9 +145,8 @@ try:
             ).data
             for v in volumes:
                 asset_id = getattr(v, "id", None)
-                if not asset_id:
+                if not asset_id: 
                     continue
-                # Different SDKs expose either get_*_asset_assignment or list_*_assignments(asset_id=)
                 assignments = []
                 if hasattr(bclient, "get_volume_backup_policy_asset_assignment"):
                     try:
@@ -160,7 +154,7 @@ try:
                         data = getattr(resp, "data", [])
                         assignments = data if isinstance(data, list) else ([data] if data else [])
                     except oci.exceptions.ServiceError as e:
-                        if getattr(e, "status", None) in (404,):
+                        if getattr(e, "status", None) == 404:
                             assignments = []
                         else:
                             raise
@@ -182,7 +176,7 @@ try:
                             continue
                         raise
 
-            # Boot volumes (need AD)
+            # Boot volumes per AD
             for ad_name in ad_names:
                 bvs = oci.pagination.list_call_get_all_results(
                     bclient.list_boot_volumes,
@@ -201,7 +195,7 @@ try:
                             data = getattr(resp, "data", [])
                             assignments = data if isinstance(data, list) else ([data] if data else [])
                         except oci.exceptions.ServiceError as e:
-                            if getattr(e, "status", None) in (404,):
+                            if getattr(e, "status", None) == 404:
                                 assignments = []
                             else:
                                 raise
@@ -231,7 +225,7 @@ try:
         initial_delay = kwargs.pop("initial_delay", 1.0)
         backoff = kwargs.pop("backoff", 2.0)
 
-        # Special-case: ONS subscriptions
+        # Special-case: ONS subscriptions (with SDK+REST fallbacks)
         if service == "ons.NotificationControlPlaneClient" and element == "subscription":
             config = args[0]; signer = args[1]; processCompartments = args[2]
             for attempt in range(retries):
@@ -244,11 +238,13 @@ try:
                         continue
                     raise
                 except Exception as e:
-                    # Non-ServiceError: brief backoff then continue retries
+                    # Non-fatal; log and continue to next attempt
+                    print(f"[ons-subscriptions] unexpected error: {e}")
                     if attempt < retries - 1:
                         time.sleep(initial_delay * (backoff ** attempt))
                         continue
-                    raise
+                    # Give up but don't break the whole run
+                    return
 
         # Special-case: Blockstorage backup policy assignments (per-asset deletion)
         if service == "core.BlockstorageClient" and element == "volume_backup_policy_assignment":
@@ -484,7 +480,7 @@ if confirm == "yes":
         DeleteAny(config, signer, processCompartments, "streaming.StreamAdminClient", "connect_harness", ObjectNameVar="name")
 
         print_header("Deleting Notifications at " + CurrentTimeString() + "@ " + region, 1)
-        # Subscriptions are now safely handled via wrapper logic
+        # Delete subscriptions BEFORE topics (wrapper handles SDK/REST)
         DeleteAny(config, signer, processCompartments, "ons.NotificationControlPlaneClient", "subscription", ServiceID="subscription_id", DelState="", DelingSate="")
         DeleteAny(config, signer, processCompartments, "ons.NotificationControlPlaneClient", "topic", ObjectNameVar="name", ServiceID="topic_id", ReturnServiceID="topic_id")
 
