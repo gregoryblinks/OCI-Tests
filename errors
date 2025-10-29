@@ -314,3 +314,16 @@ For inbound access, I require port 22 and 443 access from my Oracle Mac to enabl
 I understand internet access is blocked by an IAM policy (thank you Network Analyzer, that’s quite a good piece of kit) and I need someone to sort that for me.
 
 On the subject of Network Path Analyzer, it variously reports unknown errors and service limit issues related to the number of compartments on this tenancy. Can we have the service limits on NPA raise please so that it is fully usable?
+
+
+
+
+Traceback (most recent call last):
+  File "/home/opc/scripts/OCI-SuperDelete/delete.py", line 275, in <module>
+    DeleteAny(config, signer, processCompartments, "ons.NotificationControlPlaneClient", "subscription", ServiceID="subscription_id", DelState="", DelingSate="")
+  File "/home/opc/scripts/OCI-SuperDelete/delete.py", line 55, in DeleteAny
+    return _DeleteAnyRaw(*args, **kwargs)
+  File "/home/opc/scripts/OCI-SuperDelete/ocimodules/AnyDelete.py", line 45, in DeleteAny
+    items = eval("oci.pagination.list_call_get_all_results(object.{}, compartment_id=Compartment.id{}, retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY).data".format(ListCommand, Extra))
+  File "<string>", line 1, in <module>
+AttributeError: 'NotificationControlPlaneClient' object has no attribute 'list_subscriptions'
