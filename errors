@@ -318,12 +318,12 @@ On the subject of Network Path Analyzer, it variously reports unknown errors and
 
 
 
-Traceback (most recent call last):
-  File "/home/opc/scripts/OCI-SuperDelete/delete.py", line 275, in <module>
-    DeleteAny(config, signer, processCompartments, "ons.NotificationControlPlaneClient", "subscription", ServiceID="subscription_id", DelState="", DelingSate="")
-  File "/home/opc/scripts/OCI-SuperDelete/delete.py", line 55, in DeleteAny
+Traceback (most recent call last):ssignment objects
+  File "/home/opc/scripts/OCI-SuperDelete/delete.py", line 468, in <module>
+    DeleteAny(config, signer, processCompartments, "core.BlockstorageClient", "volume_backup_policy_assignment", DelState="", DelingSate="", ServiceID="policy_assignment_id")
+  File "/home/opc/scripts/OCI-SuperDelete/delete.py", line 116, in DeleteAny
     return _DeleteAnyRaw(*args, **kwargs)
   File "/home/opc/scripts/OCI-SuperDelete/ocimodules/AnyDelete.py", line 45, in DeleteAny
     items = eval("oci.pagination.list_call_get_all_results(object.{}, compartment_id=Compartment.id{}, retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY).data".format(ListCommand, Extra))
   File "<string>", line 1, in <module>
-AttributeError: 'NotificationControlPlaneClient' object has no attribute 'list_subscriptions'
+AttributeError: 'BlockstorageClient' object has no attribute 'list_volume_backup_policy_assignments'
