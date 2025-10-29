@@ -316,17 +316,22 @@ I understand internet access is blocked by an IAM policy (thank you Network Anal
 On the subject of Network Path Analyzer, it variously reports unknown errors and service limit issues related to the number of compartments on this tenancy. Can we have the service limits on NPA raise please so that it is fully usable?
 
 
-Deleting OCI-LAB-74: volume-ol8-inst1-blk-vol-1 @ ap-tokyo-1
-ERROR: Conflict
-
-error Conflict-Volume ocid1.volume.oc1.ap-tokyo-1.abxhiljr4o6ckb5w37svgkdgeh5br4htggqsf4cusajaldsaf6dxnq5pvj5a may not be deleted while attached to an Instance. trying to delete: OCI-LAB-74 - ol8-inst1-blk-vol-1
-Deleting OCI-LAB-74: volume-ol8-inst1-blk-vol-1 @ ap-tokyo-1
-ERROR: Conflict
-
-error Conflict-Volume ocid1.volume.oc1.ap-tokyo-1.abxhiljr4o6ckb5w37svgkdgeh5br4htggqsf4cusajaldsaf6dxnq5pvj5a may not be deleted while attached to an Instance. trying to delete: OCI-LAB-74 - ol8-inst1-blk-vol-1
-Deleting OCI-LAB-74: volume-ol8-inst1-blk-vol-1 @ ap-tokyo-1of 20
-ERROR: Conflict
-
-error Conflict-Volume ocid1.volume.oc1.ap-tokyo-1.abxhiljr4o6ckb5w37svgkdgeh5br4htggqsf4cusajaldsaf6dxnq5pvj5a may not be deleted while attached to an Instance. trying to delete: OCI-LAB-74 - ol8-inst1-blk-vol-1
-Waiting for all volume Objects to be deleted... Iteration 2 of 20
-
+#####################################################################################
+# Removing Block Volume Backup Policy Assignments at 10/29/25 11:02:44@ us-ashburn-1#
+#####################################################################################
+Deleting OCI-LAB-74: volume-upen_vol @ us-ashburn-1
+Traceback (most recent call last):
+  File "/home/opc/scripts/OCI-SuperDelete/delete.py", line 749, in <module>
+    DeleteAny(config, signer, processCompartments, "core.BlockstorageClient", "boot_volume", DelState="TERMINATED", DelingSate="TERMINATING", PerAD=True)
+  File "/home/opc/scripts/OCI-SuperDelete/delete.py", line 379, in DeleteAny
+    _detach_for_boot_volumes(config, signer, processCompartments)
+  File "/home/opc/scripts/OCI-SuperDelete/delete.py", line 301, in _detach_for_boot_volumes
+    retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY
+  File "/home/opc/python/lib/python3.7/site-packages/oci/pagination/pagination_utils.py", line 205, in list_call_get_all_results
+    for response in list_call_get_all_results_generator(list_func_ref, 'response', *list_func_args, **list_func_kwargs):
+  File "/home/opc/python/lib/python3.7/site-packages/oci/pagination/pagination_utils.py", line 274, in list_call_get_all_results_generator
+    call_result = retry.DEFAULT_RETRY_STRATEGY.make_retrying_call(list_func_ref, *list_func_args, **list_func_kwargs)
+  File "/home/opc/python/lib/python3.7/site-packages/oci/retry/retry.py", line 308, in make_retrying_call
+    response = func_ref(*func_args, **func_kwargs)
+TypeError: list_boot_volume_attachments() missing 1 required positional argument: 'availability_domain'
+[opc@oci-admin-01 ~]$
