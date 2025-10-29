@@ -3,7 +3,7 @@
 # OCI-SuperDelete                                         #
 #                                                         #
 # Use with PYTHON3!  
-# Update by Gary Wan on 20231122                                     #
+# Update by Gregory Ohwerhi on 20251029                                     #
 ###########################################################
 # Application Command line parameters
 #
@@ -45,6 +45,7 @@ oci.circuit_breaker.NoCircuitBreakerStrategy()
 # 2) Special-case ONS subscriptions: delete via topics->subscriptions.
 #    Adds REST fallback for SDK variants that lack list_subscriptions.
 # 3) Special-case Blockstorage volume_backup_policy_assignment: delete per-asset.
+# 4) Special-case Blockstorage volumes/boot_volumes: auto-detach attachments before delete.
 # ---------------------------------------------------------------------------
 try:
     _DeleteAnyRaw = DeleteAny
@@ -101,7 +102,7 @@ try:
             topics = oci.pagination.list_call_get_all_results(
                 client.list_topics,
                 compartment_id=comp_id,
-                retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY
+                retry_strategy=oci.retry.DefaultRetryStrategy() if hasattr(oci.retry, "DefaultRetryStrategy") else oci.retry.DEFAULT_RETRY_STRATEGY
             ).data
             for t in topics:
                 topic_id = getattr(t, "id", None) or getattr(t, "topic_id", None)
@@ -217,6 +218,106 @@ try:
                                 continue
                             raise
 
+    # ---------- NEW HELPERS: auto-detach volume and boot volume attachments ----------
+    def _wait_until(fn, cond, retries=20, sleep_s=6):
+        for i in range(retries):
+            val = fn()
+            if cond(val):
+                return True
+            time.sleep(sleep_s)
+        return False
+
+    def _detach_for_volumes(config, signer, processCompartments):
+        c = oci.core.ComputeClient(config, signer=signer)
+        b = oci.core.BlockstorageClient(config, signer=signer)
+        for comp in processCompartments:
+            comp_id = getattr(comp, "id", None) or getattr(getattr(comp, "details", None), "id", None)
+            if not comp_id:
+                continue
+            vols = oci.pagination.list_call_get_all_results(
+                b.list_volumes,
+                compartment_id=comp_id,
+                retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY
+            ).data
+            for v in vols:
+                vol_id = getattr(v, "id", None)
+                if not vol_id:
+                    continue
+                # detach any volume attachments in this compartment
+                atts = oci.pagination.list_call_get_all_results(
+                    c.list_volume_attachments,
+                    compartment_id=comp_id,
+                    volume_id=vol_id,
+                    retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY
+                ).data
+                for a in atts:
+                    att_id = getattr(a, "id", None)
+                    if not att_id:
+                        continue
+                    try:
+                        c.detach_volume(volume_attachment_id=att_id)
+                    except oci.exceptions.ServiceError as e:
+                        if getattr(e, "status", None) in (404, 409):
+                            pass
+                        else:
+                            raise
+                # wait until no attachments remain (best effort)
+                _wait_until(
+                    lambda: oci.pagination.list_call_get_all_results(
+                        c.list_volume_attachments, compartment_id=comp_id, volume_id=vol_id
+                    ).data,
+                    cond=lambda xs: len(xs) == 0
+                )
+
+    def _detach_for_boot_volumes(config, signer, processCompartments):
+        c = oci.core.ComputeClient(config, signer=signer)
+        b = oci.core.BlockstorageClient(config, signer=signer)
+        # Need ADs to enumerate boot volumes & attachments
+        try:
+            ic = oci.identity.IdentityClient(config, signer=signer)
+            ad_names = [ad.name for ad in ic.list_availability_domains(compartment_id=config["tenancy"]).data]
+        except Exception:
+            ad_names = []
+        for comp in processCompartments:
+            comp_id = getattr(comp, "id", None) or getattr(getattr(comp, "details", None), "id", None)
+            if not comp_id:
+                continue
+            for ad in ad_names:
+                bvols = oci.pagination.list_call_get_all_results(
+                    b.list_boot_volumes,
+                    availability_domain=ad,
+                    compartment_id=comp_id,
+                    retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY
+                ).data
+                for bv in bvols:
+                    bvid = getattr(bv, "id", None)
+                    if not bvid:
+                        continue
+                    if hasattr(c, "list_boot_volume_attachments"):
+                        batts = oci.pagination.list_call_get_all_results(
+                            c.list_boot_volume_attachments,
+                            compartment_id=comp_id,
+                            boot_volume_id=bvid,
+                            retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY
+                        ).data
+                        for ba in batts:
+                            ba_id = getattr(ba, "id", None)
+                            if not ba_id:
+                                continue
+                            try:
+                                c.detach_boot_volume(boot_volume_attachment_id=ba_id)
+                            except oci.exceptions.ServiceError as e:
+                                if getattr(e, "status", None) in (404, 409):
+                                    pass
+                                else:
+                                    raise
+                        _wait_until(
+                            lambda: oci.pagination.list_call_get_all_results(
+                                c.list_boot_volume_attachments, compartment_id=comp_id, boot_volume_id=bvid
+                            ).data,
+                            cond=lambda xs: len(xs) == 0
+                        )
+
     def DeleteAny(*args, **kwargs):
         service = args[3] if len(args) > 3 else ""
         element = args[4] if len(args) > 4 else ""
@@ -225,7 +326,7 @@ try:
         initial_delay = kwargs.pop("initial_delay", 1.0)
         backoff = kwargs.pop("backoff", 2.0)
 
-        # Special-case: ONS subscriptions (with SDK+REST fallbacks)
+        # Special-case: ONS subscriptions (with SDK/REST fallbacks)
         if service == "ons.NotificationControlPlaneClient" and element == "subscription":
             config = args[0]; signer = args[1]; processCompartments = args[2]
             for attempt in range(retries):
@@ -238,13 +339,11 @@ try:
                         continue
                     raise
                 except Exception as e:
-                    # Non-fatal; log and continue to next attempt
                     print(f"[ons-subscriptions] unexpected error: {e}")
                     if attempt < retries - 1:
                         time.sleep(initial_delay * (backoff ** attempt))
                         continue
-                    # Give up but don't break the whole run
-                    return
+                    return  # give up but don't break run
 
         # Special-case: Blockstorage backup policy assignments (per-asset deletion)
         if service == "core.BlockstorageClient" and element == "volume_backup_policy_assignment":
@@ -258,6 +357,32 @@ try:
                         time.sleep(initial_delay * (backoff ** attempt))
                         continue
                     raise
+
+        # NEW Special-case: detach volume attachments before deleting volumes
+        if service == "core.BlockstorageClient" and element == "volume":
+            config = args[0]; signer = args[1]; processCompartments = args[2]
+            for attempt in range(retries):
+                try:
+                    _detach_for_volumes(config, signer, processCompartments)
+                    break
+                except oci.exceptions.ServiceError as e:
+                    if getattr(e, "status", None) in (409, 429, 500, 502, 503, 504) and attempt < retries - 1:
+                        time.sleep(initial_delay * (backoff ** attempt)); continue
+                    raise
+            # fall through to raw delete
+
+        # NEW Special-case: detach boot volume attachments before deleting boot_volumes
+        if service == "core.BlockstorageClient" and element == "boot_volume":
+            config = args[0]; signer = args[1]; processCompartments = args[2]
+            for attempt in range(retries):
+                try:
+                    _detach_for_boot_volumes(config, signer, processCompartments)
+                    break
+                except oci.exceptions.ServiceError as e:
+                    if getattr(e, "status", None) in (409, 429, 500, 502, 503, 504) and attempt < retries - 1:
+                        time.sleep(initial_delay * (backoff ** attempt)); continue
+                    raise
+            # fall through to raw delete
 
         # Default: original DeleteAny with transient retries
         for attempt in range(retries):
