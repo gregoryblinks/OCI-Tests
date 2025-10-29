@@ -39,6 +39,29 @@ from ocimodules.UpdateConf import *
 #Disable OCI CircuitBreaker feature
 oci.circuit_breaker.NoCircuitBreakerStrategy()
 
+# ---------------------------------------------------------------------------
+# HARDENING ADDITION: wrap DeleteAny with simple retry/backoff for transient errors.
+# Retries on common transient statuses: 409/429/5xx (idempotent behavior).
+# ---------------------------------------------------------------------------
+try:
+    _DeleteAnyRaw = DeleteAny
+    def DeleteAny(*args, **kwargs):
+        retries = kwargs.pop("retries", 5)
+        initial_delay = kwargs.pop("initial_delay", 1.0)
+        backoff = kwargs.pop("backoff", 2.0)
+        for attempt in range(retries):
+            try:
+                return _DeleteAnyRaw(*args, **kwargs)
+            except oci.exceptions.ServiceError as e:
+                status = getattr(e, "status", None)
+                if status in (409, 429, 500, 502, 503, 504) and attempt < retries - 1:
+                    time.sleep(initial_delay * (backoff ** attempt))
+                    continue
+                raise
+except NameError:
+    # If DeleteAny isn't available yet for any reason, skip wrapping
+    pass
+
 #################################################
 #           Manual Configuration                #
 #################################################
@@ -286,18 +309,27 @@ if confirm == "yes":
             except Exception as e:
                 print(f"[ad-skip] {region}: {e}")
 
+        # NEW: Delete DLS datasets BEFORE AI Vision/Language to break dataset dependencies
+        print_header("Deleting Data Labeling Service at " + CurrentTimeString() + "@ " + region, 1)
+        DeleteAny(config, signer, processCompartments, "data_labeling_service.DataLabelingManagementClient", "dataset")
+        # (Records belong to datasets and are removed with dataset deletion)
+
+        # ORDERING NOTE (AI Language): endpoints -> models -> projects
         print_header("Deleting AI Language at " + CurrentTimeString() + "@ " + region, 1)
         DeleteAny(config, signer, processCompartments, "ai_language.AIServiceLanguageClient", "endpoint")
         DeleteAny(config, signer, processCompartments, "ai_language.AIServiceLanguageClient", "model")
         DeleteAny(config, signer, processCompartments, "ai_language.AIServiceLanguageClient", "project")
 
+        # ORDERING NOTE (AI Vision): models -> projects (no endpoints)
         print_header("Deleting AI Vision at " + CurrentTimeString() + "@ " + region, 1)
         DeleteAny(config, signer, processCompartments, "ai_vision.AIServiceVisionClient", "model")
         DeleteAny(config, signer, processCompartments, "ai_vision.AIServiceVisionClient", "project")
 
+        # ORDERING NOTE (AI Speech): delete jobs first; add model/project deletes if used
         print_header("Deleting AI Speech at " + CurrentTimeString() + "@ " + region, 1)
         DeleteAny(config, signer, processCompartments, "ai_speech.AIServiceSpeechClient", "transcription_job")
 
+        # ORDERING NOTE (Generative AI): endpoints -> (models) -> (clusters) if applicable
         print_header("Deleting Generative AI Endpoints at " + CurrentTimeString() + "@ " + region, 1)
         DeleteAny(config, signer, processCompartments, "generative_ai.GenerativeAiClient", "endpoint")
 
