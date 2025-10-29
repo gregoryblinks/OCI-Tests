@@ -325,3 +325,13 @@ Traceback (most recent call last):
     client.list_subscriptions,
 AttributeError: 'NotificationControlPlaneClient' object has no attribute 'list_subscriptions'
 [opc@oci-admin-01 ~]$
+
+#             Deleting DevOps Projects at 10/29/25 09:54:38@ ap-tokyo-1             #
+#####################################################################################
+Deleting OCI-LAB-74: build_pipeline-Test-Pipeline @ ap-tokyo-1
+----------------->error NotAuthorizedOrNotFound-Authorization failed or requested resource not found. trying to delete: Test-Pipeline - ACTIVE
+Deleting OCI-LAB-74: repository-Repo-1 @ ap-tokyo-1
+----------------->error NotAuthorizedOrNotFound-Authorization failed or requested resource not found. trying to delete: Repo-1 - ACTIVE
+Deleting OCI-LAB-74: project-Test-DEV @ ap-tokyo-1
+----------------->error NotAuthorizedOrNotFound-Authorization failed or requested resource not found. trying to delete: Test-DEV - ACTIVE
+No project Objects found
