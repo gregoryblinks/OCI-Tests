@@ -316,22 +316,17 @@ I understand internet access is blocked by an IAM policy (thank you Network Anal
 On the subject of Network Path Analyzer, it variously reports unknown errors and service limit issues related to the number of compartments on this tenancy. Can we have the service limits on NPA raise please so that it is fully usable?
 
 
-Traceback (most recent call last):
-  File "/home/opc/scripts/OCI-SuperDelete/delete.py", line 436, in <module>
-    DeleteAny(config, signer, processCompartments, "ons.NotificationControlPlaneClient", "subscription", ServiceID="subscription_id", DelState="", DelingSate="")
-  File "/home/opc/scripts/OCI-SuperDelete/delete.py", line 193, in DeleteAny
-    _delete_ons_subscriptions_via_topics(config, signer, processCompartments)
-  File "/home/opc/scripts/OCI-SuperDelete/delete.py", line 67, in _delete_ons_subscriptions_via_topics
-    client.list_subscriptions,
-AttributeError: 'NotificationControlPlaneClient' object has no attribute 'list_subscriptions'
-[opc@oci-admin-01 ~]$
+Deleting OCI-LAB-74: volume-ol8-inst1-blk-vol-1 @ ap-tokyo-1
+ERROR: Conflict
 
-#             Deleting DevOps Projects at 10/29/25 09:54:38@ ap-tokyo-1             #
-#####################################################################################
-Deleting OCI-LAB-74: build_pipeline-Test-Pipeline @ ap-tokyo-1
------------------>error NotAuthorizedOrNotFound-Authorization failed or requested resource not found. trying to delete: Test-Pipeline - ACTIVE
-Deleting OCI-LAB-74: repository-Repo-1 @ ap-tokyo-1
------------------>error NotAuthorizedOrNotFound-Authorization failed or requested resource not found. trying to delete: Repo-1 - ACTIVE
-Deleting OCI-LAB-74: project-Test-DEV @ ap-tokyo-1
------------------>error NotAuthorizedOrNotFound-Authorization failed or requested resource not found. trying to delete: Test-DEV - ACTIVE
-No project Objects found
+error Conflict-Volume ocid1.volume.oc1.ap-tokyo-1.abxhiljr4o6ckb5w37svgkdgeh5br4htggqsf4cusajaldsaf6dxnq5pvj5a may not be deleted while attached to an Instance. trying to delete: OCI-LAB-74 - ol8-inst1-blk-vol-1
+Deleting OCI-LAB-74: volume-ol8-inst1-blk-vol-1 @ ap-tokyo-1
+ERROR: Conflict
+
+error Conflict-Volume ocid1.volume.oc1.ap-tokyo-1.abxhiljr4o6ckb5w37svgkdgeh5br4htggqsf4cusajaldsaf6dxnq5pvj5a may not be deleted while attached to an Instance. trying to delete: OCI-LAB-74 - ol8-inst1-blk-vol-1
+Deleting OCI-LAB-74: volume-ol8-inst1-blk-vol-1 @ ap-tokyo-1of 20
+ERROR: Conflict
+
+error Conflict-Volume ocid1.volume.oc1.ap-tokyo-1.abxhiljr4o6ckb5w37svgkdgeh5br4htggqsf4cusajaldsaf6dxnq5pvj5a may not be deleted while attached to an Instance. trying to delete: OCI-LAB-74 - ol8-inst1-blk-vol-1
+Waiting for all volume Objects to be deleted... Iteration 2 of 20
+
