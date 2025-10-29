@@ -4,7 +4,6 @@
 #                                                         #
 # Use with PYTHON3!  
 # Update by Gary Wan on 20231122                                     #
-# Updated by Gregory Ohwerhi on 20251029                                     #
 ###########################################################
 # Application Command line parameters
 #
@@ -41,26 +40,87 @@ from ocimodules.UpdateConf import *
 oci.circuit_breaker.NoCircuitBreakerStrategy()
 
 # ---------------------------------------------------------------------------
-# HARDENING ADDITION: wrap DeleteAny with simple retry/backoff for transient errors.
-# Retries on common transient statuses: 409/429/5xx (idempotent behavior).
+# ADDITION 1: Harden DeleteAny with retry/backoff AND a smart ONS subscription handler.
+# - Retries for transient ServiceError (409/429/5xx)
+# - Special-case: "ons.NotificationControlPlaneClient" + "subscription"
+#   Some SDK builds don't expose list_subscriptions the way AnyDelete expects.
+#   We delete subscriptions by iterating topics -> subscriptions -> delete.
 # ---------------------------------------------------------------------------
 try:
     _DeleteAnyRaw = DeleteAny
+
+    def _delete_ons_subscriptions_via_topics(config, signer, processCompartments):
+        client = oci.ons.NotificationControlPlaneClient(config, signer=signer)
+        for comp in processCompartments:
+            # Try both 'id' and 'details.id' for safety; Login() usually provides .id
+            comp_id = getattr(comp, "id", None) or getattr(getattr(comp, "details", None), "id", None)
+            if not comp_id:
+                continue
+            # list topics in this compartment
+            topics = oci.pagination.list_call_get_all_results(
+                client.list_topics,
+                compartment_id=comp_id,
+                retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY
+            ).data
+            for t in topics:
+                topic_id = getattr(t, "id", None) or getattr(t, "topic_id", None)
+                if not topic_id:
+                    continue
+                # list subscriptions for the topic (some SDKs insist on topic_id)
+                subs = oci.pagination.list_call_get_all_results(
+                    client.list_subscriptions,
+                    compartment_id=comp_id,
+                    topic_id=topic_id,
+                    retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY
+                ).data
+                for s in subs:
+                    sub_id = getattr(s, "id", None) or getattr(s, "subscription_id", None)
+                    if not sub_id:
+                        continue
+                    try:
+                        client.delete_subscription(subscription_id=sub_id)
+                    except oci.exceptions.ServiceError as e:
+                        # ignore gone/not found; re-raise others
+                        if getattr(e, "status", None) in (404, 409):
+                            continue
+                        raise
+
     def DeleteAny(*args, **kwargs):
+        # Extract service+element so we can intercept ONS subscriptions
+        service = args[3] if len(args) > 3 else ""
+        element = args[4] if len(args) > 4 else ""
+        # Retry config (optional kwargs)
         retries = kwargs.pop("retries", 5)
         initial_delay = kwargs.pop("initial_delay", 1.0)
         backoff = kwargs.pop("backoff", 2.0)
+
+        # Special-case: delete ONS subscriptions by topic (avoid missing list_subscriptions attr)
+        if service == "ons.NotificationControlPlaneClient" and element == "subscription":
+            config = args[0]
+            signer = args[1]
+            processCompartments = args[2]
+            # Try a couple of times in case topics are concurrently changing
+            for attempt in range(retries):
+                try:
+                    _delete_ons_subscriptions_via_topics(config, signer, processCompartments)
+                    return  # done; don't call the raw function (prevents AttributeError path)
+                except oci.exceptions.ServiceError as e:
+                    if getattr(e, "status", None) in (409, 429, 500, 502, 503, 504) and attempt < retries - 1:
+                        time.sleep(initial_delay * (backoff ** attempt))
+                        continue
+                    raise
+
+        # Default path: original DeleteAny with transient retries
         for attempt in range(retries):
             try:
                 return _DeleteAnyRaw(*args, **kwargs)
             except oci.exceptions.ServiceError as e:
-                status = getattr(e, "status", None)
-                if status in (409, 429, 500, 502, 503, 504) and attempt < retries - 1:
+                if getattr(e, "status", None) in (409, 429, 500, 502, 503, 504) and attempt < retries - 1:
                     time.sleep(initial_delay * (backoff ** attempt))
                     continue
                 raise
 except NameError:
-    # If DeleteAny isn't available yet for any reason, skip wrapping
+    # If DeleteAny isn't imported yet for any reason, skip wrapping
     pass
 
 #################################################
@@ -271,7 +331,7 @@ if confirm == "yes":
         DeleteAny(config, signer, processCompartments, "streaming.StreamAdminClient", "connect_harness", ObjectNameVar="name")
 
         print_header("Deleting Notifications at " + CurrentTimeString() + "@ " + region, 1)
-        # Delete subscriptions BEFORE topics
+        # Delete subscriptions BEFORE topics (now handled via wrapper if SDK lacks list_subscriptions)
         DeleteAny(config, signer, processCompartments, "ons.NotificationControlPlaneClient", "subscription", ServiceID="subscription_id", DelState="", DelingSate="")
         DeleteAny(config, signer, processCompartments, "ons.NotificationControlPlaneClient", "topic", ObjectNameVar="name", ServiceID="topic_id", ReturnServiceID="topic_id")
 
