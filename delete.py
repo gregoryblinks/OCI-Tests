@@ -278,6 +278,37 @@ try:
             ad_names = [ad.name for ad in ic.list_availability_domains(compartment_id=config["tenancy"]).data]
         except Exception:
             ad_names = []
+    
+        # Helper: list boot volume attachments with proper AD param; fallback to REST if needed
+        def _list_bv_atts(ad, comp_id, boot_volume_id):
+            if hasattr(c, "list_boot_volume_attachments"):
+                return oci.pagination.list_call_get_all_results(
+                    c.list_boot_volume_attachments,
+                    availability_domain=ad,                # <-- REQUIRED
+                    compartment_id=comp_id,
+                    boot_volume_id=boot_volume_id,
+                    retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY
+                ).data
+            # REST fallback
+            try:
+                resp = c.base_client.call_api(
+                    resource_path="/20160918/bootVolumeAttachments",
+                    method="GET",
+                    query_params={
+                        "availabilityDomain": ad,
+                        "compartmentId": comp_id,
+                        "bootVolumeId": boot_volume_id
+                    }
+                )
+                import json
+                payload = resp.data
+                if isinstance(payload, (bytes, bytearray)):
+                    payload = json.loads(payload.decode("utf-8"))
+                items = payload if isinstance(payload, list) else payload.get("items", [])
+                return items
+            except Exception:
+                return []
+    
         for comp in processCompartments:
             comp_id = getattr(comp, "id", None) or getattr(getattr(comp, "details", None), "id", None)
             if not comp_id:
@@ -293,30 +324,33 @@ try:
                     bvid = getattr(bv, "id", None)
                     if not bvid:
                         continue
-                    if hasattr(c, "list_boot_volume_attachments"):
-                        batts = oci.pagination.list_call_get_all_results(
-                            c.list_boot_volume_attachments,
-                            compartment_id=comp_id,
-                            boot_volume_id=bvid,
-                            retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY
-                        ).data
-                        for ba in batts:
-                            ba_id = getattr(ba, "id", None)
-                            if not ba_id:
-                                continue
-                            try:
+                    # list boot volume attachments BY AD (required)
+                    batts = _list_bv_atts(ad, comp_id, bvid)
+                    for ba in batts:
+                        ba_id = getattr(ba, "id", None) or ba.get("id")
+                        if not ba_id:
+                            continue
+                        try:
+                            if hasattr(c, "detach_boot_volume"):
                                 c.detach_boot_volume(boot_volume_attachment_id=ba_id)
-                            except oci.exceptions.ServiceError as e:
-                                if getattr(e, "status", None) in (404, 409):
-                                    pass
-                                else:
-                                    raise
-                        _wait_until(
-                            lambda: oci.pagination.list_call_get_all_results(
-                                c.list_boot_volume_attachments, compartment_id=comp_id, boot_volume_id=bvid
-                            ).data,
-                            cond=lambda xs: len(xs) == 0
-                        )
+                            else:
+                                # REST fallback
+                                c.base_client.call_api(
+                                    resource_path=f"/20160918/bootVolumeAttachments/{ba_id}",
+                                    method="DELETE"
+                                )
+                        except oci.exceptions.ServiceError as e:
+                            if getattr(e, "status", None) in (404, 409):
+                                pass
+                            else:
+                                raise
+                    # Wait until no attachments remain (best effort)
+                    _wait_until(
+                        lambda: _list_bv_atts(ad, comp_id, bvid),
+                        cond=lambda xs: len(xs) == 0,
+                        retries=20,
+                        sleep_s=6
+                    )
 
     def DeleteAny(*args, **kwargs):
         service = args[3] if len(args) > 3 else ""
