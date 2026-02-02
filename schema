@@ -877,3 +877,18 @@ LEFT JOIN det d
   ON d.problem_id = r.problem_id;
 
 ORDER BY r.remediated_time DESC;
+
+Full state timeline per problem (see transitions)
+SELECT
+    problem_id,
+    event_time,
+    lifecycle_state,
+    LAG(lifecycle_state) OVER (PARTITION BY problem_id ORDER BY event_time) AS prev_state,
+    CASE
+      WHEN lifecycle_state != LAG(lifecycle_state) OVER (PARTITION BY problem_id ORDER BY event_time)
+      THEN 'STATE_CHANGED'
+    END AS change_flag,
+    event_id
+FROM cloudguard_app.cloudguard_findings
+WHERE problem_id = :problem_id
+ORDER BY event_time
