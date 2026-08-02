@@ -1,3 +1,70 @@
+-- Starting remote build of Custom Studies Source files: YMU_YM_DeltaDivergence_v1.cpp. 64-bit --     15:02:28
+
+Allow time for the server to compile the files and build the DLL.
+
+Server: https://build.sierrachart.com
+The remote build is complete.
+The build failed.
+In file included from sierrachart.h:23,
+                 from YMU_YM_DeltaDivergence_v1.cpp:1:
+YMU_YM_DeltaDivergence_v1.cpp: In function 'int {anonymous}::FindPreviousPivotLow(SCStudyInterfaceRef, int, int, int, int, int, bool)':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YMU_YM_DeltaDivergence_v1.cpp:213:40: note: in expansion of macro 'max'
+  213 |         const int LastCandidate = std::max(
+      |                                        ^~~
+YMU_YM_DeltaDivergence_v1.cpp: In function 'int {anonymous}::FindPreviousPivotHigh(SCStudyInterfaceRef, int, int, int, int, int, bool)':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YMU_YM_DeltaDivergence_v1.cpp:246:40: note: in expansion of macro 'max'
+  246 |         const int LastCandidate = std::max(
+      |                                        ^~~
+YMU_YM_DeltaDivergence_v1.cpp: In function 'double {anonymous}::AverageAbsoluteBarDelta(SCSubgraphRef, int, int)':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YMU_YM_DeltaDivergence_v1.cpp:273:37: note: in expansion of macro 'max'
+  273 |         const int StartIndex = std::max(0, EndingIndex - Length + 1);
+      |                                     ^~~
+YMU_YM_DeltaDivergence_v1.cpp: In function 'void scsf_YMYMUConfirmedDeltaDivergence(SCStudyInterfaceRef)':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YMU_YM_DeltaDivergence_v1.cpp:730:14: note: in expansion of macro 'max'
+  730 |         std::max(0, sc.Index - SmoothingLength + 1);
+      |              ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YMU_YM_DeltaDivergence_v1.cpp:773:47: note: in expansion of macro 'max'
+  773 |     const int MaximumBarsBetweenPivots = std::max(
+      |                                               ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YMU_YM_DeltaDivergence_v1.cpp:842:39: note: in expansion of macro 'max'
+  842 |     const double RequiredDelta = std::max(
+      |                                       ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YMU_YM_DeltaDivergence_v1.cpp:869:18: note: in expansion of macro 'max'
+  869 |             std::max(0, PreviousPivotIndex - SmoothingLength + 1);
+      |                  ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YMU_YM_DeltaDivergence_v1.cpp:940:18: note: in expansion of macro 'max'
+  940 |             std::max(0, PreviousPivotIndex - SmoothingLength + 1);
+      |                  ^~~
+
+Failed to generate the DLL file.
+
+-- End of Build --     15:02:32
+
+
 #include "sierrachart.h"
 
 #include <algorithm>
