@@ -1,3 +1,822 @@
+-- Starting remote build of Custom Studies Source files: YM_Adaptive_OrderFlow_Signals.cpp. 64-bit --     01:23:49
+
+Allow time for the server to compile the files and build the DLL.
+
+Server: https://build.sierrachart.com
+The remote build is complete.
+The build failed.
+YM_Adaptive_OrderFlow_Signals.cpp:415:64: error: macro "max" requires 2 arguments, but only 1 given
+  415 |         int nearestHVNDistance = std::numeric_limits<int>::max();
+      |                                                                ^
+In file included from sierrachart.h:23,
+                 from YM_Adaptive_OrderFlow_Signals.cpp:1:
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+YM_Adaptive_OrderFlow_Signals.cpp:416:64: error: macro "max" requires 2 arguments, but only 1 given
+  416 |         int nearestLVNDistance = std::numeric_limits<int>::max();
+      |                                                                ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+YM_Adaptive_OrderFlow_Signals.cpp:457:63: error: macro "max" requires 2 arguments, but only 1 given
+  457 |             double minimum = std::numeric_limits<double>::max();
+      |                                                               ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+YM_Adaptive_OrderFlow_Signals.cpp:499:63: error: macro "max" requires 2 arguments, but only 1 given
+  499 |     double HighTradePrice = -std::numeric_limits<double>::max();
+      |                                                               ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+YM_Adaptive_OrderFlow_Signals.cpp:500:61: error: macro "max" requires 2 arguments, but only 1 given
+  500 |     double LowTradePrice = std::numeric_limits<double>::max();
+      |                                                             ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+YM_Adaptive_OrderFlow_Signals.cpp:576:60: error: macro "max" requires 2 arguments, but only 1 given
+  576 |     double SessionHigh = -std::numeric_limits<double>::max();
+      |                                                            ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+YM_Adaptive_OrderFlow_Signals.cpp:577:58: error: macro "max" requires 2 arguments, but only 1 given
+  577 |     double SessionLow = std::numeric_limits<double>::max();
+      |                                                          ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+YM_Adaptive_OrderFlow_Signals.cpp:578:65: error: macro "max" requires 2 arguments, but only 1 given
+  578 |     double OpeningRangeHigh = -std::numeric_limits<double>::max();
+      |                                                                 ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+YM_Adaptive_OrderFlow_Signals.cpp:579:63: error: macro "max" requires 2 arguments, but only 1 given
+  579 |     double OpeningRangeLow = std::numeric_limits<double>::max();
+      |                                                               ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+YM_Adaptive_OrderFlow_Signals.cpp:623:57: error: macro "max" requires 2 arguments, but only 1 given
+  623 |         SessionHigh = -std::numeric_limits<double>::max();
+      |                                                         ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+YM_Adaptive_OrderFlow_Signals.cpp:624:55: error: macro "max" requires 2 arguments, but only 1 given
+  624 |         SessionLow = std::numeric_limits<double>::max();
+      |                                                       ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+YM_Adaptive_OrderFlow_Signals.cpp:625:62: error: macro "max" requires 2 arguments, but only 1 given
+  625 |         OpeningRangeHigh = -std::numeric_limits<double>::max();
+      |                                                              ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+YM_Adaptive_OrderFlow_Signals.cpp:626:60: error: macro "max" requires 2 arguments, but only 1 given
+  626 |         OpeningRangeLow = std::numeric_limits<double>::max();
+      |                                                            ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+YM_Adaptive_OrderFlow_Signals.cpp:801:56: error: macro "max" requires 2 arguments, but only 1 given
+  801 |     double highest = -std::numeric_limits<double>::max();
+      |                                                        ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+YM_Adaptive_OrderFlow_Signals.cpp:802:54: error: macro "max" requires 2 arguments, but only 1 given
+  802 |     double lowest = std::numeric_limits<double>::max();
+      |                                                      ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+YM_Adaptive_OrderFlow_Signals.cpp:1145:66: error: macro "max" requires 2 arguments, but only 1 given
+ 1145 |     if (state.OpeningRangeLow < std::numeric_limits<double>::max())
+      |                                                                  ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+YM_Adaptive_OrderFlow_Signals.cpp:1147:68: error: macro "max" requires 2 arguments, but only 1 given
+ 1147 |     if (state.OpeningRangeHigh > -std::numeric_limits<double>::max())
+      |                                                                    ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+YM_Adaptive_OrderFlow_Signals.cpp:1162:65: error: macro "max" requires 2 arguments, but only 1 given
+ 1162 |         if (state.SessionLow < std::numeric_limits<double>::max()
+      |                                                                 ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+YM_Adaptive_OrderFlow_Signals.cpp:1163:70: error: macro "max" requires 2 arguments, but only 1 given
+ 1163 |             && state.SessionHigh > -std::numeric_limits<double>::max())
+      |                                                                      ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+YM_Adaptive_OrderFlow_Signals.cpp:1310:68: error: macro "max" requires 2 arguments, but only 1 given
+ 1310 |     if (state.OpeningRangeHigh > -std::numeric_limits<double>::max())
+      |                                                                    ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+YM_Adaptive_OrderFlow_Signals.cpp:1312:66: error: macro "max" requires 2 arguments, but only 1 given
+ 1312 |     if (state.OpeningRangeLow < std::numeric_limits<double>::max())
+      |                                                                  ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+YM_Adaptive_OrderFlow_Signals.cpp:1331:68: error: macro "max" requires 2 arguments, but only 1 given
+ 1331 |     else if (state.SessionHigh > -std::numeric_limits<double>::max())
+      |                                                                    ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+YM_Adaptive_OrderFlow_Signals.cpp:1346:66: error: macro "max" requires 2 arguments, but only 1 given
+ 1346 |     else if (state.SessionLow < std::numeric_limits<double>::max())
+      |                                                                  ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+YM_Adaptive_OrderFlow_Signals.cpp: In function 'double ymaofs::Clamp(double, double, double)':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:77:17: note: in expansion of macro 'max'
+   77 |     return std::max(lo, std::min(hi, x));
+      |                 ^~~
+scstructures.h:96:29: error: expected unqualified-id before '(' token
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                             ^
+scstructures.h:92:38: note: in definition of macro 'max'
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                                      ^
+YM_Adaptive_OrderFlow_Signals.cpp:77:30: note: in expansion of macro 'min'
+   77 |     return std::max(lo, std::min(hi, x));
+      |                              ^~~
+scstructures.h:96:29: error: expected unqualified-id before '(' token
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                             ^
+scstructures.h:92:51: note: in definition of macro 'max'
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                                                   ^
+YM_Adaptive_OrderFlow_Signals.cpp:77:30: note: in expansion of macro 'min'
+   77 |     return std::max(lo, std::min(hi, x));
+      |                              ^~~
+YM_Adaptive_OrderFlow_Signals.cpp: In function 'double ymaofs::SmoothStep(double, double, double)':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:93:49: note: in expansion of macro 'max'
+   93 |     return Logistic(SafeDivide(x - center, std::max(width, 1e-6)));
+      |                                                 ^~~
+YM_Adaptive_OrderFlow_Signals.cpp: In function 'double ymaofs::GaussianNear(double, double)':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:98:27: note: in expansion of macro 'max'
+   98 |     const double s = std::max(scale, 1e-6);
+      |                           ^~~
+YM_Adaptive_OrderFlow_Signals.cpp: In function 'int ymaofs::PriceToTicks(double, double)':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:115:34: note: in expansion of macro 'max'
+  115 |     const double safeTick = std::max(tickSize, 1e-8);
+      |                                  ^~~
+YM_Adaptive_OrderFlow_Signals.cpp: In function 'int ymaofs::BarsForMinutes(int, int)':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:126:30: note: in expansion of macro 'max'
+  126 |     const int seconds = std::max(1, barSeconds);
+      |                              ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:127:17: note: in expansion of macro 'max'
+  127 |     return std::max(2, static_cast<int>(std::ceil(minutes * 60.0 / seconds)));
+      |                 ^~~
+YM_Adaptive_OrderFlow_Signals.cpp: In member function 'double ymaofs::EWStat::StandardDeviation() const':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:138:31: note: in expansion of macro 'max'
+  138 |         return std::sqrt(std::max(Variance, 1e-8));
+      |                               ^~~
+YM_Adaptive_OrderFlow_Signals.cpp: In member function 'void ymaofs::EWStat::Update(double, double)':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:158:38: note: in expansion of macro 'max'
+  158 |             const double seed = std::max(std::fabs(value) * 0.10, 1.0);
+      |                                      ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:167:25: note: in expansion of macro 'max'
+  167 |         Variance = std::max(1e-8, (1.0 - a) * Variance + a * innovation * (value - Mean));
+      |                         ^~~
+YM_Adaptive_OrderFlow_Signals.cpp: In member function 'ymaofs::ProfileSnapshot ymaofs::SessionProfile::Snapshot(int) const':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:408:27: note: in expansion of macro 'max'
+  408 |             median = std::max(1.0, positiveSmooth[middle]);
+      |                           ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:415:60: error: invalid conversion from 'int (*)() noexcept' to 'int' [-fpermissive]
+  415 |         int nearestHVNDistance = std::numeric_limits<int>::max();
+      |                                                            ^~~
+      |                                                            |
+      |                                                            int (*)() noexcept
+YM_Adaptive_OrderFlow_Signals.cpp:416:60: error: invalid conversion from 'int (*)() noexcept' to 'int' [-fpermissive]
+  416 |         int nearestLVNDistance = std::numeric_limits<int>::max();
+      |                                                            ^~~
+      |                                                            |
+      |                                                            int (*)() noexcept
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:429:29: note: in expansion of macro 'max'
+  429 |                     && std::max(smooth[i - 1], smooth[i + 1]) >= 0.95 * median;
+      |                             ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:457:59: error: cannot convert 'double (*)() noexcept' to 'double' in initialization
+  457 |             double minimum = std::numeric_limits<double>::max();
+      |                                                           ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:478:49: note: in expansion of macro 'max'
+  478 |         snapshot.VWAPTicks = PriceVolume / std::max(TotalVolume, 1.0);
+      |                                                 ^~~
+YM_Adaptive_OrderFlow_Signals.cpp: At global scope:
+YM_Adaptive_OrderFlow_Signals.cpp:499:59: error: wrong type argument to unary minus
+  499 |     double HighTradePrice = -std::numeric_limits<double>::max();
+      |                                                           ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:500:57: error: cannot convert 'double (*)() noexcept' to 'double' in initialization
+  500 |     double LowTradePrice = std::numeric_limits<double>::max();
+      |                                                         ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:576:56: error: wrong type argument to unary minus
+  576 |     double SessionHigh = -std::numeric_limits<double>::max();
+      |                                                        ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:577:54: error: cannot convert 'double (*)() noexcept' to 'double' in initialization
+  577 |     double SessionLow = std::numeric_limits<double>::max();
+      |                                                      ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:578:61: error: wrong type argument to unary minus
+  578 |     double OpeningRangeHigh = -std::numeric_limits<double>::max();
+      |                                                             ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:579:59: error: cannot convert 'double (*)() noexcept' to 'double' in initialization
+  579 |     double OpeningRangeLow = std::numeric_limits<double>::max();
+      |                                                           ^~~
+YM_Adaptive_OrderFlow_Signals.cpp: In member function 'void ymaofs::EngineState::BeginNewSession(int)':
+YM_Adaptive_OrderFlow_Signals.cpp:623:53: error: wrong type argument to unary minus
+  623 |         SessionHigh = -std::numeric_limits<double>::max();
+      |                                                     ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:624:51: error: cannot convert 'double() noexcept' to 'double' in assignment
+  624 |         SessionLow = std::numeric_limits<double>::max();
+      |                                                   ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:625:58: error: wrong type argument to unary minus
+  625 |         OpeningRangeHigh = -std::numeric_limits<double>::max();
+      |                                                          ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:626:56: error: cannot convert 'double() noexcept' to 'double' in assignment
+  626 |         OpeningRangeLow = std::numeric_limits<double>::max();
+      |                                                        ^~~
+YM_Adaptive_OrderFlow_Signals.cpp: In function 'ymaofs::BarFootprint ymaofs::ExtractFootprint(SCStudyInterfaceRef, int, double)':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:689:32: note: in expansion of macro 'max'
+  689 |     const int tickRange = std::max(1, highTicks - lowTicks);
+      |                                ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:696:39: note: in expansion of macro 'max'
+  696 |         footprint.Levels.reserve(std::max(0, count));
+      |                                       ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:762:14: note: in expansion of macro 'max'
+  762 |         std::max(1, highTicks - lowTicks), 0.5), 0.0, 1.0);
+      |              ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:775:53: note: in expansion of macro 'max'
+  775 |         const bool askImbalance = ask >= 3.0 * std::max(1.0, bidBelow) && ask >= 4.0;
+      |                                                     ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:776:53: note: in expansion of macro 'max'
+  776 |         const bool bidImbalance = bid >= 3.0 * std::max(1.0, askAbove) && bid >= 4.0;
+      |                                                     ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:780:50: note: in expansion of macro 'max'
+  780 |         footprint.MaxStackedAskImbalances = std::max(footprint.MaxStackedAskImbalances, askRun);
+      |                                                  ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:781:50: note: in expansion of macro 'max'
+  781 |         footprint.MaxStackedBidImbalances = std::max(footprint.MaxStackedBidImbalances, bidRun);
+      |                                                  ^~~
+YM_Adaptive_OrderFlow_Signals.cpp: In function 'ymaofs::WindowMetrics ymaofs::CalculateWindowMetrics(SCStudyInterfaceRef, int, int, double)':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:791:28: note: in expansion of macro 'max'
+  791 |     const int start = std::max(0, index - bars + 1);
+      |                            ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:801:52: error: wrong type argument to unary minus
+  801 |     double highest = -std::numeric_limits<double>::max();
+      |                                                    ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:802:50: error: cannot convert 'double (*)() noexcept' to 'double' in initialization
+  802 |     double lowest = std::numeric_limits<double>::max();
+      |                                                  ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:812:24: note: in expansion of macro 'max'
+  812 |         highest = std::max(highest, static_cast<double>(sc.BaseDataIn[SC_HIGH][i]));
+      |                        ^~~
+scstructures.h:96:29: error: expected unqualified-id before '(' token
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:813:23: note: in expansion of macro 'min'
+  813 |         lowest = std::min(lowest, static_cast<double>(sc.BaseDataIn[SC_LOW][i]));
+      |                       ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:826:33: note: in expansion of macro 'max'
+  826 |     const double safeATR = std::max(atr, sc.TickSize * 4.0);
+      |                                 ^~~
+YM_Adaptive_OrderFlow_Signals.cpp: In function 'void ymaofs::ProcessTimeAndSales(SCStudyInterfaceRef, EngineState&)':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:900:53: note: in expansion of macro 'max'
+  900 |             micro.MaximumConsecutiveSameSide = std::max(micro.MaximumConsecutiveSameSide,
+      |                                                     ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:910:41: note: in expansion of macro 'max'
+  910 |             micro.HighTradePrice = std::max(micro.HighTradePrice, price);
+      |                                         ^~~
+scstructures.h:96:29: error: expected unqualified-id before '(' token
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:911:40: note: in expansion of macro 'min'
+  911 |             micro.LowTradePrice = std::min(micro.LowTradePrice, price);
+      |                                        ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:926:33: note: in expansion of macro 'max'
+  926 |     const int trimBefore = std::max(0, sc.ArraySize - 400);
+      |                                 ^~~
+YM_Adaptive_OrderFlow_Signals.cpp: In function 'void ymaofs::CaptureDepth(SCStudyInterfaceRef, EngineState&)':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1025:33: note: in expansion of macro 'max'
+ 1025 |     const int trimBefore = std::max(0, sc.ArraySize - 400);
+      |                                 ^~~
+YM_Adaptive_OrderFlow_Signals.cpp: In function 'ymaofs::BarContext ymaofs::BuildBarContext(SCStudyInterfaceRef, EngineState&, int)':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1040:27: note: in expansion of macro 'max'
+ 1040 |     context.Bucket = std::max(0, std::min(kSessionBuckets - 1,
+      |                           ^~~
+scstructures.h:96:29: error: expected unqualified-id before '(' token
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                             ^
+scstructures.h:92:38: note: in definition of macro 'max'
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                                      ^
+YM_Adaptive_OrderFlow_Signals.cpp:1040:39: note: in expansion of macro 'min'
+ 1040 |     context.Bucket = std::max(0, std::min(kSessionBuckets - 1,
+      |                                       ^~~
+scstructures.h:96:29: error: expected unqualified-id before '(' token
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                             ^
+scstructures.h:92:51: note: in definition of macro 'max'
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                                                   ^
+YM_Adaptive_OrderFlow_Signals.cpp:1040:39: note: in expansion of macro 'min'
+ 1040 |     context.Bucket = std::max(0, std::min(kSessionBuckets - 1,
+      |                                       ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1047:27: note: in expansion of macro 'max'
+ 1047 |     context.Volume = std::max(0.0f, sc.BaseDataIn[SC_VOLUME][index]);
+      |                           ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1048:30: note: in expansion of macro 'max'
+ 1048 |     context.BidVolume = std::max(0.0f, sc.BaseDataIn[SC_BIDVOL][index]);
+      |                              ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1049:30: note: in expansion of macro 'max'
+ 1049 |     context.AskVolume = std::max(0.0f, sc.BaseDataIn[SC_ASKVOL][index]);
+      |                              ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1052:26: note: in expansion of macro 'max'
+ 1052 |     context.Range = std::max(static_cast<double>(sc.TickSize), context.High - context.Low);
+      |                          ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1055:30: note: in expansion of macro 'max'
+ 1055 |     context.TrueRange = std::max(context.Range,
+      |                              ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1055:30: note: in expansion of macro 'max'
+ 1055 |     context.TrueRange = std::max(context.Range,
+      |                              ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:1056:14: note: in expansion of macro 'max'
+ 1056 |         std::max(std::fabs(context.High - previousClose), std::fabs(context.Low - previousClose)));
+      |              ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1055:30: note: in expansion of macro 'max'
+ 1055 |     context.TrueRange = std::max(context.Range,
+      |                              ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:1056:14: note: in expansion of macro 'max'
+ 1056 |         std::max(std::fabs(context.High - previousClose), std::fabs(context.Low - previousClose)));
+      |              ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1058:37: note: in expansion of macro 'max'
+ 1058 |     const double fallbackATR = std::max(context.TrueRange, sc.TickSize * 8.0);
+      |                                     ^~~
+scstructures.h:96:29: error: expected unqualified-id before '(' token
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1063:45: note: in expansion of macro 'min'
+ 1063 |     context.LowerWickFraction = Clamp((std::min(context.Open, context.Close) - context.Low) / context.Range, 0.0, 1.0);
+      |                                             ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1064:60: note: in expansion of macro 'max'
+ 1064 |     context.UpperWickFraction = Clamp((context.High - std::max(context.Open, context.Close)) / context.Range, 0.0, 1.0);
+      |                                                            ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1065:77: note: in expansion of macro 'max'
+ 1065 |     context.ReturnNormalized = Clamp((context.Close - previousClose) / std::max(context.ATR, static_cast<double>(sc.TickSize)), -5.0, 5.0);
+      |                                                                             ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1089:60: note: in expansion of macro 'max'
+ 1089 |     const double beta = Clamp(state.ImpactNumerator / std::max(state.ImpactDenominator, 0.05), -3.0, 3.0);
+      |                                                            ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1093:33: note: in expansion of macro 'max'
+ 1093 |     const int barSeconds = std::max(1, sc.SecondsPerBar);
+      |                                 ^~~
+YM_Adaptive_OrderFlow_Signals.cpp: In function 'double ymaofs::LevelNearness(double, int, double, double, double)':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1104:56: note: in expansion of macro 'max'
+ 1104 |     return GaussianNear(std::fabs(close - level), std::max(tickSize * 3.0, widthATR * atr));
+      |                                                        ^~~
+YM_Adaptive_OrderFlow_Signals.cpp: In lambda function:
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1124:18: note: in expansion of macro 'max'
+ 1124 |             std::max(3.0 * tickSize, 0.42 * atr));
+      |                  ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1127:21: note: in expansion of macro 'max'
+ 1127 |         best = std::max(best, Clamp(levelWeight / 1.15, 0.35, 1.0) * nearness);
+      |                     ^~~
+YM_Adaptive_OrderFlow_Signals.cpp: In function 'double ymaofs::DirectionalLevelContext(const BarContext&, const EngineState&, double, bool)':
+YM_Adaptive_OrderFlow_Signals.cpp:1145:31: error: invalid operands of types 'const double' and 'double() noexcept' to binary 'operator<'
+ 1145 |     if (state.OpeningRangeLow < std::numeric_limits<double>::max())
+      |         ~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+YM_Adaptive_OrderFlow_Signals.cpp:1147:64: error: wrong type argument to unary minus
+ 1147 |     if (state.OpeningRangeHigh > -std::numeric_limits<double>::max())
+      |                                                                ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:1162:30: error: invalid operands of types 'const double' and 'double() noexcept' to binary 'operator<'
+ 1162 |         if (state.SessionLow < std::numeric_limits<double>::max()
+      |             ~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+YM_Adaptive_OrderFlow_Signals.cpp:1163:66: error: wrong type argument to unary minus
+ 1163 |             && state.SessionHigh > -std::numeric_limits<double>::max())
+      |                                                                  ^~~
+YM_Adaptive_OrderFlow_Signals.cpp: In function 'ymaofs::ScoreSet ymaofs::CalculateScores(const BarContext&, const EngineState&, double)':
+scstructures.h:96:29: error: expected unqualified-id before '(' token
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1223:25: note: in expansion of macro 'min'
+ 1223 |         && c.Low < std::min(state.PreviousLow1, state.PreviousLow2) - 0.25 * tickSize;
+      |                         ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1225:26: note: in expansion of macro 'max'
+ 1225 |         && c.High > std::max(state.PreviousHigh1, state.PreviousHigh2) + 0.25 * tickSize;
+      |                          ^~~
+scstructures.h:96:29: error: expected unqualified-id before '(' token
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1226:65: note: in expansion of macro 'min'
+ 1226 |     const double sellFlowImprovement = SmoothStep(c.Flow - std::min(state.PreviousFlow1, state.PreviousFlow2),
+      |                                                                 ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1228:57: note: in expansion of macro 'max'
+ 1228 |     const double buyFlowDeterioration = SmoothStep(std::max(state.PreviousFlow1, state.PreviousFlow2) - c.Flow,
+      |                                                         ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1230:48: note: in expansion of macro 'max'
+ 1230 |     const double volumeDryUp = SmoothStep(std::max(state.PreviousVolumeZ1, state.PreviousVolumeZ2) - c.VolumeZ,
+      |                                                ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1251:40: note: in expansion of macro 'max'
+ 1251 |     const double bullExhaustion = std::max(bullDryExhaustion, bullClimax);
+      |                                        ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1252:40: note: in expansion of macro 'max'
+ 1252 |     const double bearExhaustion = std::max(bearDryExhaustion, bearClimax);
+      |                                        ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1277:53: note: in expansion of macro 'max'
+ 1277 |     const int maximumAcceptanceDistanceTicks = std::max(4,
+      |                                                     ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1277:53: note: in expansion of macro 'max'
+ 1277 |     const int maximumAcceptanceDistanceTicks = std::max(4,
+      |                                                     ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:1278:56: note: in expansion of macro 'max'
+ 1278 |         static_cast<int>(std::ceil(1.25 * c.ATR / std::max(tickSize, 1e-8))));
+      |                                                        ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1277:53: note: in expansion of macro 'max'
+ 1277 |     const int maximumAcceptanceDistanceTicks = std::max(4,
+      |                                                     ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:1278:56: note: in expansion of macro 'max'
+ 1278 |         static_cast<int>(std::ceil(1.25 * c.ATR / std::max(tickSize, 1e-8))));
+      |                                                        ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:1310:64: error: wrong type argument to unary minus
+ 1310 |     if (state.OpeningRangeHigh > -std::numeric_limits<double>::max())
+      |                                                                ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:1312:31: error: invalid operands of types 'const double' and 'double() noexcept' to binary 'operator<'
+ 1312 |     if (state.OpeningRangeLow < std::numeric_limits<double>::max())
+      |         ~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1325:57: note: in expansion of macro 'max'
+ 1325 |         const double through = (c.Close - level) / std::max(c.ATR, tickSize);
+      |                                                         ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:1331:64: error: wrong type argument to unary minus
+ 1331 |     else if (state.SessionHigh > -std::numeric_limits<double>::max())
+      |                                                                ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1333:85: note: in expansion of macro 'max'
+ 1333 |         acceptanceUp = Clamp(0.58 * SmoothStep((c.Close - state.SessionHigh) / std::max(c.ATR, tickSize), 0.02, 0.12)
+      |                                                                                     ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1340:57: note: in expansion of macro 'max'
+ 1340 |         const double through = (level - c.Close) / std::max(c.ATR, tickSize);
+      |                                                         ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:1346:31: error: invalid operands of types 'const double' and 'double() noexcept' to binary 'operator<'
+ 1346 |     else if (state.SessionLow < std::numeric_limits<double>::max())
+      |              ~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1348:86: note: in expansion of macro 'max'
+ 1348 |         acceptanceDown = Clamp(0.58 * SmoothStep((state.SessionLow - c.Close) / std::max(c.ATR, tickSize), 0.02, 0.12)
+      |                                                                                      ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1410:43: note: in expansion of macro 'max'
+ 1410 |     scores.ContinuationUpRaw = Clamp(std::max(
+      |                                           ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1414:45: note: in expansion of macro 'max'
+ 1414 |     scores.ContinuationDownRaw = Clamp(std::max(
+      |                                             ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1418:44: note: in expansion of macro 'max'
+ 1418 |     const double directionalMaximum = std::max(
+      |                                            ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1418:44: note: in expansion of macro 'max'
+ 1418 |     const double directionalMaximum = std::max(
+      |                                            ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:1419:14: note: in expansion of macro 'max'
+ 1419 |         std::max(scores.ReversalUpRaw, scores.ReversalDownRaw),
+      |              ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1418:44: note: in expansion of macro 'max'
+ 1418 |     const double directionalMaximum = std::max(
+      |                                            ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:1420:14: note: in expansion of macro 'max'
+ 1420 |         std::max(scores.ContinuationUpRaw, scores.ContinuationDownRaw));
+      |              ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1418:44: note: in expansion of macro 'max'
+ 1418 |     const double directionalMaximum = std::max(
+      |                                            ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:1419:14: note: in expansion of macro 'max'
+ 1419 |         std::max(scores.ReversalUpRaw, scores.ReversalDownRaw),
+      |              ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1418:44: note: in expansion of macro 'max'
+ 1418 |     const double directionalMaximum = std::max(
+      |                                            ^~~
+YM_Adaptive_OrderFlow_Signals.cpp:1420:14: note: in expansion of macro 'max'
+ 1420 |         std::max(scores.ContinuationUpRaw, scores.ContinuationDownRaw));
+      |              ^~~
+scstructures.h:96:29: error: expected unqualified-id before '(' token
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1421:45: note: in expansion of macro 'min'
+ 1421 |     const double directionalConflict = std::min(
+      |                                             ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+scstructures.h:96:32: note: in definition of macro 'min'
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                                ^
+YM_Adaptive_OrderFlow_Signals.cpp:1422:14: note: in expansion of macro 'max'
+ 1422 |         std::max(scores.ReversalUpRaw, scores.ContinuationUpRaw),
+      |              ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+scstructures.h:96:38: note: in definition of macro 'min'
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                                      ^
+YM_Adaptive_OrderFlow_Signals.cpp:1423:14: note: in expansion of macro 'max'
+ 1423 |         std::max(scores.ReversalDownRaw, scores.ContinuationDownRaw));
+      |              ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+scstructures.h:96:45: note: in definition of macro 'min'
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1422:14: note: in expansion of macro 'max'
+ 1422 |         std::max(scores.ReversalUpRaw, scores.ContinuationUpRaw),
+      |              ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+scstructures.h:96:51: note: in definition of macro 'min'
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                                                   ^
+YM_Adaptive_OrderFlow_Signals.cpp:1423:14: note: in expansion of macro 'max'
+ 1423 |         std::max(scores.ReversalDownRaw, scores.ContinuationDownRaw));
+      |              ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1455:50: note: in expansion of macro 'max'
+ 1455 |         scores.Probability[i] = logits[i] / std::max(denominator, kEpsilon);
+      |                                                  ^~~
+YM_Adaptive_OrderFlow_Signals.cpp: In function 'void ymaofs::PlotDiagnostics(SCStudyInterfaceRef, const BarContext&, const ScoreSet&, double, double, double, double)':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1508:39: note: in expansion of macro 'max'
+ 1508 |     if (c.Micro.TotalVolume() >= std::max(20.0, 0.15 * c.Volume))
+      |                                       ^~~
+scstructures.h:96:29: error: expected unqualified-id before '(' token
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1512:67: note: in expansion of macro 'min'
+ 1512 |     sc.Subgraph[SG_DATA_QUALITY][index] = static_cast<float>(std::min(100.0, dataQuality));
+      |                                                                   ^~~
+YM_Adaptive_OrderFlow_Signals.cpp: In function 'void ymaofs::ProcessClosedBar(SCStudyInterfaceRef, EngineState&, int)':
+scstructures.h:96:29: error: expected unqualified-id before '(' token
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1654:25: note: in expansion of macro 'min'
+ 1654 |         && c.Low < std::min(state.PreviousLow1, state.PreviousLow2) - 0.25 * sc.TickSize;
+      |                         ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1656:26: note: in expansion of macro 'max'
+ 1656 |         && c.High > std::max(state.PreviousHigh1, state.PreviousHigh2) + 0.25 * sc.TickSize;
+      |                          ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1666:33: note: in expansion of macro 'max'
+ 1666 |     const int barSeconds = std::max(1, sc.SecondsPerBar);
+      |                                 ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1667:35: note: in expansion of macro 'max'
+ 1667 |     const int cooldownBars = std::max(2, static_cast<int>(std::ceil(12.0 * 60.0 / barSeconds)));
+      |                                   ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1672:41: note: in expansion of macro 'max'
+ 1672 |         const double arrowOffset = std::max(2.0 * sc.TickSize, 0.18 * c.ATR);
+      |                                         ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1715:39: note: in expansion of macro 'max'
+ 1715 |         state.OpeningRangeHigh = std::max(state.OpeningRangeHigh, c.High);
+      |                                       ^~~
+scstructures.h:96:29: error: expected unqualified-id before '(' token
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1716:38: note: in expansion of macro 'min'
+ 1716 |         state.OpeningRangeLow = std::min(state.OpeningRangeLow, c.Low);
+      |                                      ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1723:30: note: in expansion of macro 'max'
+ 1723 |     state.SessionHigh = std::max(state.SessionHigh, c.High);
+      |                              ^~~
+scstructures.h:96:29: error: expected unqualified-id before '(' token
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                             ^
+YM_Adaptive_OrderFlow_Signals.cpp:1724:29: note: in expansion of macro 'min'
+ 1724 |     state.SessionLow = std::min(state.SessionLow, c.Low);
+      |                             ^~~
+
+Failed to generate the DLL file.
+
+-- End of Build --     01:23:55
+
+
+
+
 fn create context oci-context --provider oracle
 fn update context oci-context oracle.region us-ashburn-1
 fn update context oci-context oracle.compartment-id <COMPARTMENT_OCID>
