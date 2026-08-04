@@ -1,4 +1,20 @@
+-- Starting remote build of Custom Studies Source files: SierraChart_OrderFlowTools.cpp. 64-bit --     10:16:57
 
+Allow time for the server to compile the files and build the DLL.
+
+Server: https://build.sierrachart.com
+The remote build is complete.
+The build failed.
+SierraChart_OrderFlowTools.cpp: In function 'void scsf_VolumeProfilePOCNodeTiers(SCStudyInterfaceRef)':
+SierraChart_OrderFlowTools.cpp:1270:25: error: invalid conversion from 'int' to 'SubgraphLineStyles' [-fpermissive]
+ 1270 |         Ray.LineStyle = LineStyle;
+      |                         ^~~~~~~~~
+      |                         |
+      |                         int
+
+Failed to generate the DLL file.
+
+-- End of Build --     10:17:02
 
 
 
