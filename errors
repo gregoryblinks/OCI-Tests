@@ -1,21 +1,16 @@
--- Starting remote build of Custom Studies Source files: SierraChart_MBO_Absorption_Exhaustion.cpp. 64-bit --     12:00:13
+-- Starting remote build of Custom Studies Source files: SierraChart_MBO_Absorption_Exhaustion_HIGH_CONFIDENCE_BUY_SELL.cpp. 64-bit --     16:52:31
 
 Allow time for the server to compile the files and build the DLL.
 
-Server: https://build.sierrachart.com
+Server: https://build3.sierrachart.com
 The remote build is complete.
 The build failed.
-SierraChart_MBO_Absorption_Exhaustion.cpp: In function 'void MboAE::UpdateActiveLevelLines(SCStudyInterfaceRef, StudyState&, bool, bool, int, int, COLORREF, COLORREF, COLORREF, COLORREF, COLORREF)':
-SierraChart_MBO_Absorption_Exhaustion.cpp:2063:34: error: invalid conversion from 'int' to 'SubgraphLineStyles' [-fpermissive]
- 2063 |                 Tool.LineStyle = LineStyle;
-      |                                  ^~~~~~~~~
-      |                                  |
-      |                                  int
+cc1plus: fatal error: SierraChart_MBO_Absorption_Exhaustion_HIGH_CONFIDENCE_BUY_SE.cpp: No such file or directory
+compilation terminated.
 
 Failed to generate the DLL file.
 
--- End of Build --     12:00:19
-
+-- End of Build --     16:52:34
 
 
 fn create context oci-context --provider oracle
