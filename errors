@@ -1,21 +1,235 @@
--- Starting remote build of Custom Studies Source files: SierraChart_OrderFlowTools.cpp. 64-bit --     10:16:57
+-- Starting remote build of Custom Studies Source files: SierraChart_MBO_DOM_Intelligence.cpp. 64-bit --     11:07:51
 
 Allow time for the server to compile the files and build the DLL.
 
 Server: https://build.sierrachart.com
 The remote build is complete.
 The build failed.
-SierraChart_OrderFlowTools.cpp: In function 'void scsf_VolumeProfilePOCNodeTiers(SCStudyInterfaceRef)':
-SierraChart_OrderFlowTools.cpp:1270:25: error: invalid conversion from 'int' to 'SubgraphLineStyles' [-fpermissive]
- 1270 |         Ray.LineStyle = LineStyle;
-      |                         ^~~~~~~~~
-      |                         |
-      |                         int
+SierraChart_MBO_DOM_Intelligence.cpp:308:73: error: macro "max" requires 2 arguments, but only 1 given
+  308 |         int MinimumDistanceToTouchTicks = std::numeric_limits<int>::max();
+      |                                                                         ^
+In file included from sierrachart.h:23,
+                 from SierraChart_MBO_DOM_Intelligence.cpp:1:
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+SierraChart_MBO_DOM_Intelligence.cpp:702:75: error: macro "max" requires 2 arguments, but only 1 given
+  702 |         return ExpectedPayloadBytes <= std::numeric_limits<uint32_t>::max()
+      |                                                                           ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+SierraChart_MBO_DOM_Intelligence.cpp:814:48: error: macro "max" requires 2 arguments, but only 1 given
+  814 |             ? std::numeric_limits<double>::max()
+      |                                                ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+SierraChart_MBO_DOM_Intelligence.cpp:1090:46: error: macro "max" requires 2 arguments, but only 1 given
+ 1090 |         return std::numeric_limits<int>::max();
+      |                                              ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+SierraChart_MBO_DOM_Intelligence.cpp:1149:64: error: macro "max" requires 2 arguments, but only 1 given
+ 1149 |         int LowestPriceInTicks = std::numeric_limits<int>::max();
+      |                                                                ^
+scstructures.h:92: note: macro "max" defined here
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      | 
+SierraChart_MBO_DOM_Intelligence.cpp:1150:65: error: macro "min" requires 2 arguments, but only 1 given
+ 1150 |         int HighestPriceInTicks = std::numeric_limits<int>::min();
+      |                                                                 ^
+scstructures.h:96: note: macro "min" defined here
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      | 
+SierraChart_MBO_DOM_Intelligence.cpp:308:69: error: invalid conversion from 'int (*)() noexcept' to 'int' [-fpermissive]
+  308 |         int MinimumDistanceToTouchTicks = std::numeric_limits<int>::max();
+      |                                                                     ^~~
+      |                                                                     |
+      |                                                                     int (*)() noexcept
+SierraChart_MBO_DOM_Intelligence.cpp: In function 'bool MboDom::CaptureSide(SCStudyInterfaceRef, int, int, int, uint64_t, BookFrame&, bool&)':
+scstructures.h:96:29: error: expected unqualified-id before '(' token
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                             ^
+SierraChart_MBO_DOM_Intelligence.cpp:522:39: note: in expansion of macro 'min'
+  522 |         const int LevelsToRead = std::min(AvailableLevels, MaximumDepthLevels);
+      |                                       ^~~
+SierraChart_MBO_DOM_Intelligence.cpp: In function 'bool MboDom::ValidateFrameHeader(const DiskFrameHeader&, const DiskFileHeader&, uint64_t&)':
+SierraChart_MBO_DOM_Intelligence.cpp:702:37: error: ISO C++ forbids comparison between pointer and integer [-fpermissive]
+  702 |         return ExpectedPayloadBytes <= std::numeric_limits<uint32_t>::max()
+      |                ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+SierraChart_MBO_DOM_Intelligence.cpp: In function 'bool MboDom::WriteFrame(RecorderState&, const RecorderConfiguration&, const BookFrame&, SCString&)':
+SierraChart_MBO_DOM_Intelligence.cpp:814:13: error: operands to '?:' have different types 'double (*)() noexcept' and 'double'
+  813 |         const double SinceLastMilliseconds = State.LastWrittenDateTime == 0.0
+      |                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  814 |             ? std::numeric_limits<double>::max()
+      |             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  815 |             : MillisecondsBetween(Frame.DateTime, State.LastWrittenDateTime);
+      |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+SierraChart_MBO_DOM_Intelligence.cpp: In function 'int MboDom::DistanceToTouch(const OrderKey&, const BookFrame&)':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+SierraChart_MBO_DOM_Intelligence.cpp:1087:25: note: in expansion of macro 'max'
+ 1087 |             return std::max(0, Frame.BestBidInTicks - Key.PriceInTicks);
+      |                         ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+SierraChart_MBO_DOM_Intelligence.cpp:1089:25: note: in expansion of macro 'max'
+ 1089 |             return std::max(0, Key.PriceInTicks - Frame.BestAskInTicks);
+      |                         ^~~
+SierraChart_MBO_DOM_Intelligence.cpp:1090:42: error: invalid conversion from 'int (*)() noexcept' to 'int' [-fpermissive]
+ 1090 |         return std::numeric_limits<int>::max();
+      |                                          ^~~
+      |                                          |
+      |                                          int (*)() noexcept
+SierraChart_MBO_DOM_Intelligence.cpp: In function 'void MboDom::PurgeBehaviorQueues(LevelBehavior&, double, const DetectionConfiguration&)':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+SierraChart_MBO_DOM_Intelligence.cpp:1101:52: note: in expansion of macro 'max'
+ 1101 |         const double SyntheticWindowSeconds = std::max(1.0, Configuration.SyntheticReplacementMilliseconds / 1000.0 * 4.0);
+      |                                                    ^~~
+SierraChart_MBO_DOM_Intelligence.cpp: In function 'void MboDom::MarkIceberg(LevelBehavior&, int, int, double, const DetectionConfiguration&)':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+SierraChart_MBO_DOM_Intelligence.cpp:1125:41: note: in expansion of macro 'max'
+ 1125 |         Behavior.IcebergStrength = std::max(Behavior.IcebergStrength, Strength);
+      |                                         ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+SierraChart_MBO_DOM_Intelligence.cpp:1126:38: note: in expansion of macro 'max'
+ 1126 |         Behavior.IcebergUntil = std::max(
+      |                                      ^~~
+SierraChart_MBO_DOM_Intelligence.cpp: In function 'bool MboDom::IsPriceInsideCapturedSideRange(const OrderKey&, const BookFrame&)':
+SierraChart_MBO_DOM_Intelligence.cpp:1149:60: error: invalid conversion from 'int (*)() noexcept' to 'int' [-fpermissive]
+ 1149 |         int LowestPriceInTicks = std::numeric_limits<int>::max();
+      |                                                            ^~~
+      |                                                            |
+      |                                                            int (*)() noexcept
+SierraChart_MBO_DOM_Intelligence.cpp:1150:61: error: invalid conversion from 'int (*)() noexcept' to 'int' [-fpermissive]
+ 1150 |         int HighestPriceInTicks = std::numeric_limits<int>::min();
+      |                                                             ^~~
+      |                                                             |
+      |                                                             int (*)() noexcept
+scstructures.h:96:29: error: expected unqualified-id before '(' token
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                             ^
+SierraChart_MBO_DOM_Intelligence.cpp:1158:39: note: in expansion of macro 'min'
+ 1158 |             LowestPriceInTicks = std::min(LowestPriceInTicks, Level.Key.PriceInTicks);
+      |                                       ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+SierraChart_MBO_DOM_Intelligence.cpp:1159:40: note: in expansion of macro 'max'
+ 1159 |             HighestPriceInTicks = std::max(HighestPriceInTicks, Level.Key.PriceInTicks);
+      |                                        ^~~
+SierraChart_MBO_DOM_Intelligence.cpp: In function 'void MboDom::ProcessDetectionFrame(DetectionEngine&, const BookFrame&, const DetectionConfiguration&, std::vector<DetectionEvent>&)':
+scstructures.h:96:29: error: expected unqualified-id before '(' token
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                             ^
+SierraChart_MBO_DOM_Intelligence.cpp:1246:44: note: in expansion of macro 'min'
+ 1246 |                 Behavior.SpoofScore = std::min(100, static_cast<int>(Behavior.SpoofLikeCancellationTimes.size()) * 25);
+      |                                            ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+SierraChart_MBO_DOM_Intelligence.cpp:1250:51: note: in expansion of macro 'max'
+ 1250 |                     Behavior.SuppressUntil = std::max(
+      |                                                   ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+SierraChart_MBO_DOM_Intelligence.cpp:1309:54: note: in expansion of macro 'max'
+ 1309 |                         const uint64_t Larger = std::max(CandidateIterator->Quantity, Current.Quantity);
+      |                                                      ^~~
+scstructures.h:96:29: error: expected unqualified-id before '(' token
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                             ^
+SierraChart_MBO_DOM_Intelligence.cpp:1310:67: note: in expansion of macro 'min'
+ 1310 |                         const uint64_t Difference = Larger - std::min(CandidateIterator->Quantity, Current.Quantity);
+      |                                                                   ^~~
+scstructures.h:96:29: error: expected unqualified-id before '(' token
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                             ^
+SierraChart_MBO_DOM_Intelligence.cpp:1357:33: note: in expansion of macro 'min'
+ 1357 |                 Strength = std::min(5, 2 + Life.RefreshObservations);
+      |                                 ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+SierraChart_MBO_DOM_Intelligence.cpp:1395:41: note: in expansion of macro 'max'
+ 1395 |             Life.MaximumQuantity = std::max(Life.MaximumQuantity, Current.Quantity);
+      |                                         ^~~
+scstructures.h:96:29: error: expected unqualified-id before '(' token
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                             ^
+SierraChart_MBO_DOM_Intelligence.cpp:1398:53: note: in expansion of macro 'min'
+ 1398 |             Life.MinimumDistanceToTouchTicks = std::min(Life.MinimumDistanceToTouchTicks, DistanceToTouch(Key, Frame));
+      |                                                     ^~~
+SierraChart_MBO_DOM_Intelligence.cpp: In function 'bool MboDom::IsOrderSpoofSuppressed(const OrderKey&, const DetectionEngine&, const DetectionConfiguration&, double)':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+SierraChart_MBO_DOM_Intelligence.cpp:1437:41: note: in expansion of macro 'max'
+ 1437 |             && ExecutedFraction <= std::max(0.25, Configuration.SpoofMaximumExecutedFraction * 2.0);
+      |                                         ^~~
+SierraChart_MBO_DOM_Intelligence.cpp: In function 'void MboDom::DrawMboDomToChart(HWND, HDC, SCStudyInterfaceRef)':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+SierraChart_MBO_DOM_Intelligence.cpp:1699:43: note: in expansion of macro 'max'
+ 1699 |                 MaximumBidQuantity = std::max(MaximumBidQuantity, Quantity);
+      |                                           ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+SierraChart_MBO_DOM_Intelligence.cpp:1701:43: note: in expansion of macro 'max'
+ 1701 |                 MaximumAskQuantity = std::max(MaximumAskQuantity, Quantity);
+      |                                           ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+SierraChart_MBO_DOM_Intelligence.cpp:1704:40: note: in expansion of macro 'max'
+ 1704 |         const int HalfRowHeight = std::max(6, FontHeight / 2 + 2);
+      |                                        ^~~
+scstructures.h:96:29: error: expected unqualified-id before '(' token
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                             ^
+SierraChart_MBO_DOM_Intelligence.cpp:1719:67: note: in expansion of macro 'min'
+ 1719 |             const double Fraction = SideMaximum == 0 ? 0.0 : std::min(1.0, static_cast<double>(Quantity) / static_cast<double>(SideMaximum));
+      |                                                                   ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+SierraChart_MBO_DOM_Intelligence.cpp:1721:42: note: in expansion of macro 'max'
+ 1721 |             const int FilledWidth = std::max(2, static_cast<int>(std::floor(FullWidth * Fraction)));
+      |                                          ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+SierraChart_MBO_DOM_Intelligence.cpp:1745:24: note: in expansion of macro 'max'
+ 1745 |                 ? std::max(Left + 2, Right - static_cast<int>(TextSize.cx) - 3)
+      |                        ^~~
+SierraChart_MBO_DOM_Intelligence.cpp: In function 'void scsf_MBODOMIntelligence(SCStudyInterfaceRef)':
+SierraChart_MBO_DOM_Intelligence.cpp:2154:36: error: no matching function for call to 'Clamp(unsigned int, int, int)'
+ 2154 |     State->Visual.SpoofMode = Clamp(SpoofDisplay.GetIndex(), static_cast<int>(SPOOF_SHOW), static_cast<int>(SPOOF_HIDE));
+      |                               ~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+SierraChart_MBO_DOM_Intelligence.cpp:427:7: note: candidate: 'template<class T> T MboDom::Clamp(T, T, T)'
+  427 |     T Clamp(const T Value, const T Minimum, const T Maximum)
+      |       ^~~~~
+SierraChart_MBO_DOM_Intelligence.cpp:427:7: note:   template argument deduction/substitution failed:
+SierraChart_MBO_DOM_Intelligence.cpp:2154:36: note:   deduced conflicting types for parameter 'T' ('unsigned int' and 'int')
+ 2154 |     State->Visual.SpoofMode = Clamp(SpoofDisplay.GetIndex(), static_cast<int>(SPOOF_SHOW), static_cast<int>(SPOOF_HIDE));
+      |                               ~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Failed to generate the DLL file.
 
--- End of Build --     10:17:02
-
+-- End of Build --     11:07:58
 
 
 
