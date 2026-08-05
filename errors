@@ -1,16 +1,119 @@
--- Starting remote build of Custom Studies Source files: SierraChart_MBO_Absorption_Exhaustion_HIGH_CONFIDENCE_BUY_SELL.cpp. 64-bit --     16:52:31
+-- Starting remote build of Custom Studies Source files: ACSIL_DOM_Iceberg_Exporter.cpp. 64-bit --     17:32:22
 
 Allow time for the server to compile the files and build the DLL.
 
-Server: https://build3.sierrachart.com
+Server: https://build.sierrachart.com
 The remote build is complete.
 The build failed.
-cc1plus: fatal error: SierraChart_MBO_Absorption_Exhaustion_HIGH_CONFIDENCE_BUY_SE.cpp: No such file or directory
-compilation terminated.
+In file included from sierrachart.h:23,
+                 from ACSIL_DOM_Iceberg_Exporter.cpp:1:
+ACSIL_DOM_Iceberg_Exporter.cpp: In function 'void {anonymous}::FlushIfNeeded(ExporterState&, int)':
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+ACSIL_DOM_Iceberg_Exporter.cpp:191:50: note: in expansion of macro 'max'
+  191 |             static_cast<unsigned long long>(std::max(1, FlushEveryRows));
+      |                                                  ^~~
+ACSIL_DOM_Iceberg_Exporter.cpp: In function 'void {anonymous}::CaptureDepthSnapshot(ExporterState&, SCStudyInterfaceRef, int, int, SCDateTime)':
+scstructures.h:96:29: error: expected unqualified-id before '(' token
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                             ^
+ACSIL_DOM_Iceberg_Exporter.cpp:428:36: note: in expansion of macro 'min'
+  428 |         const int BidLevels = std::min(
+      |                                    ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+scstructures.h:96:32: note: in definition of macro 'min'
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                                ^
+ACSIL_DOM_Iceberg_Exporter.cpp:429:18: note: in expansion of macro 'max'
+  429 |             std::max(0, Sc.GetBidMarketDepthNumberOfLevels()),
+      |                  ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+scstructures.h:96:38: note: in definition of macro 'min'
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                                      ^
+ACSIL_DOM_Iceberg_Exporter.cpp:430:18: note: in expansion of macro 'max'
+  430 |             std::max(1, RequestedLevels));
+      |                  ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+scstructures.h:96:45: note: in definition of macro 'min'
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                                             ^
+ACSIL_DOM_Iceberg_Exporter.cpp:429:18: note: in expansion of macro 'max'
+  429 |             std::max(0, Sc.GetBidMarketDepthNumberOfLevels()),
+      |                  ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+scstructures.h:96:51: note: in definition of macro 'min'
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                                                   ^
+ACSIL_DOM_Iceberg_Exporter.cpp:430:18: note: in expansion of macro 'max'
+  430 |             std::max(1, RequestedLevels));
+      |                  ^~~
+scstructures.h:96:29: error: expected unqualified-id before '(' token
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                             ^
+ACSIL_DOM_Iceberg_Exporter.cpp:431:36: note: in expansion of macro 'min'
+  431 |         const int AskLevels = std::min(
+      |                                    ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+scstructures.h:96:32: note: in definition of macro 'min'
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                                ^
+ACSIL_DOM_Iceberg_Exporter.cpp:432:18: note: in expansion of macro 'max'
+  432 |             std::max(0, Sc.GetAskMarketDepthNumberOfLevels()),
+      |                  ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+scstructures.h:96:38: note: in definition of macro 'min'
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                                      ^
+ACSIL_DOM_Iceberg_Exporter.cpp:433:18: note: in expansion of macro 'max'
+  433 |             std::max(1, RequestedLevels));
+      |                  ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+scstructures.h:96:45: note: in definition of macro 'min'
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                                             ^
+ACSIL_DOM_Iceberg_Exporter.cpp:432:18: note: in expansion of macro 'max'
+  432 |             std::max(0, Sc.GetAskMarketDepthNumberOfLevels()),
+      |                  ^~~
+scstructures.h:92:29: error: expected unqualified-id before '(' token
+   92 | #define max(a,b)            (((a) > (b)) ? (a) : (b))
+      |                             ^
+scstructures.h:96:51: note: in definition of macro 'min'
+   96 | #define min(a,b)            (((a) < (b)) ? (a) : (b))
+      |                                                   ^
+ACSIL_DOM_Iceberg_Exporter.cpp:433:18: note: in expansion of macro 'max'
+  433 |             std::max(1, RequestedLevels));
+      |                  ^~~
+ACSIL_DOM_Iceberg_Exporter.cpp: In function 'void scsf_DOMIcebergCSVExporter(SCStudyInterfaceRef)':
+ACSIL_DOM_Iceberg_Exporter.cpp:748:15: error: reference to 'MILLISECONDS_PER_DAY' is ambiguous
+  748 |             * MILLISECONDS_PER_DAY;
+      |               ^~~~~~~~~~~~~~~~~~~~
+ACSIL_DOM_Iceberg_Exporter.cpp:17:18: note: candidates are: 'const double {anonymous}::MILLISECONDS_PER_DAY'
+   17 |     const double MILLISECONDS_PER_DAY = 86400000.0;
+      |                  ^~~~~~~~~~~~~~~~~~~~
+In file included from scstructures.h:105:
+scdatetime.h:98:18: note:                 'const int MILLISECONDS_PER_DAY'
+   98 | static const int MILLISECONDS_PER_DAY = MILLISECONDS_PER_SECOND*SECONDS_PER_DAY;  // number of milliseconds in a day = 86 400 000
+      |                  ^~~~~~~~~~~~~~~~~~~~
 
 Failed to generate the DLL file.
 
--- End of Build --     16:52:34
+-- End of Build --     17:32:27
 
 
 fn create context oci-context --provider oracle
