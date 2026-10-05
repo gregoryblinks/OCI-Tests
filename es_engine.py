@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-VERSION = "1.1.1"
+VERSION = "1.1.2"
 SECOND = 1_000_000_000
 MINUTE = 60 * SECOND
 SIDES = ("bid", "ask")
@@ -180,12 +180,12 @@ class BookError(RuntimeError):
     pass
 
 
-def whole_mbo_level(value, event_type, field_name, minimum):
-    """Accept native integers or exactly integral floats, never round/rescale.
+def whole_level(value, context, field_name, minimum, units="integer level"):
+    """Normalize exactly whole numeric values without truncating or rescaling.
 
-    Bookmap MBO price_level is already in ticks, not ES price points. This
-    compatibility conversion does not divide by pips or truncate fractions.
-    CANCEL never calls this helper: only its order ID is meaningful.
+    bool is deliberately rejected although it is a subclass of int in Python.
+    Bookmap prices are already tick levels. ES size_multiplier is checked at
+    subscription; this helper must not divide by pips or guess a size scale.
     """
     if isinstance(value, bool):
         number = None
@@ -197,9 +197,50 @@ def whole_mbo_level(value, event_type, field_name, minimum):
         number = None
     if number is None or number < minimum:
         required = "positive" if minimum else "non-negative"
-        raise BookError("MBO %s: %s=%r (%s); expected %s integer level" % (
-            event_type, field_name, value, type(value).__name__, required))
+        raise BookError("%s: %s=%r (%s); expected %s %s" % (
+            context, field_name, value, type(value).__name__, required, units))
     return number
+
+
+def whole_mbo_level(value, event_type, field_name, minimum):
+    """CANCEL never calls this helper: only its stored order is meaningful."""
+    return whole_level(value, "MBO " + event_type, field_name, minimum)
+
+
+def trade_flag(value, field_name):
+    """Reject ambiguous truthy strings/numbers; the published callback uses bool."""
+    if not isinstance(value, bool):
+        raise BookError("TRADE: %s=%r (%s); expected bool" % (
+            field_name, value, type(value).__name__))
+    return value
+
+
+def audit_json_value(value):
+    """Losslessly tag nonfinite callback floats for strict JSON/CSV diagnostics.
+
+    Only the exceptional logging path needs this traversal. Ordinary callback
+    dictionaries are serialized unchanged. Replay decodes the reserved tag.
+    """
+    if isinstance(value, float) and not math.isfinite(value):
+        return {"__es_nonfinite_float__": repr(value)}
+    if isinstance(value, dict):
+        return {k: audit_json_value(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [audit_json_value(v) for v in value]
+    return value
+
+
+def decode_audit_json(value):
+    if isinstance(value, dict):
+        if set(value) == {"__es_nonfinite_float__"}:
+            text = value["__es_nonfinite_float__"]
+            if text not in ("nan", "inf", "-inf"):
+                raise ValueError("Invalid nonfinite callback encoding")
+            return float(text)
+        return {k: decode_audit_json(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [decode_audit_json(v) for v in value]
+    return value
 
 
 class OrderBook:
@@ -308,6 +349,7 @@ class MemoryStore:
     def __init__(self):
         self.rows = defaultdict(list)
         self.latest_value = None
+        self.rejected_value = None
         self.path = None
 
     def write(self, table, row, ts_ns):
@@ -315,6 +357,9 @@ class MemoryStore:
 
     def latest(self, data):
         self.latest_value = dict(data)
+
+    def rejected(self, data):
+        self.rejected_value = dict(data)
 
     def heartbeat(self, data):
         pass
@@ -329,8 +374,16 @@ class MemoryStore:
 def safe_cell(value):
     if value is None:
         return ""
+    if isinstance(value, float) and not math.isfinite(value):
+        value = audit_json_value(value)
     if isinstance(value, (dict, list, tuple)):
-        value = json.dumps(value, separators=(",", ":"), sort_keys=True, allow_nan=False)
+        try:
+            value = json.dumps(value, separators=(",", ":"), sort_keys=True, allow_nan=False)
+        except ValueError:
+            # Invalid NaN/infinity must be logged, not cause a second worker
+            # failure while attempting to record the original validation fault.
+            value = json.dumps(audit_json_value(value), separators=(",", ":"),
+                               sort_keys=True, allow_nan=False)
     if isinstance(value, str) and value.lstrip().startswith(("=", "+", "-", "@")):
         return "'" + value
     return value
@@ -391,6 +444,9 @@ class CsvStore:
 
     def latest(self, data):
         self._atomic("latest.json", data)
+
+    def rejected(self, data):
+        self._atomic("rejected_event.json", data)
 
     def heartbeat(self, data):
         self._atomic("health.json", data)
@@ -1044,6 +1100,7 @@ class Engine:
         if not math.isclose(tick_size, 0.25, abs_tol=1e-12):
             raise ValueError("This build is for outright ES with 0.25-point ticks")
         self.alias, self.tick_size, self.timestamp_basis = alias, tick_size, timestamp_basis
+        self.metadata = dict(metadata or {})
         self.store, self.emit = store or MemoryStore(), emit
         self.now_ns, self.safety_check = now_ns, safety_check
         self.book, self.benchmarks = OrderBook(), Benchmarks(self.cfg)
@@ -1230,20 +1287,24 @@ class Engine:
 
     def _trade(self, e):
         d, bar = e.data, self.bar
-        price, qty = float(d["price"]), d["qty"]
-        if not math.isfinite(price) or abs(price - round(price)) > 1e-7:
-            raise BookError("Off-grid trade; not an outright ES tick price")
-        if not isinstance(qty, int) or qty <= 0:
-            raise BookError("Trade size must be positive integer ES contracts")
-        price = int(round(price))
-        if d.get("is_otc", False):
+        # Explicit OTC events are outside this on-book execution analysis.
+        # Exclude them before enforcing the outright ES execution contract;
+        # their untouched fields remain in events.csv, and they never update
+        # volume, OHLC, order matching, batch boundaries, or trigger outcomes.
+        if trade_flag(d.get("is_otc", False), "is_otc"):
             bar.counts["otc"] += 1
-            return {"price": price, "qty": qty}
-        is_buy = bool(d["is_buy"])
+            return {"price": d.get("price"), "qty": d.get("qty")}
+        # Keep e.data untouched for the callback audit. No int(qty) shortcut:
+        # fractional, zero/negative and boolean sizes must not become trades.
+        qty = whole_level(d.get("qty"), "TRADE", "size_level", 1, "whole ES contracts")
+        price = whole_level(d.get("price"), "TRADE", "price_level", 1, "whole ES tick price")
+        is_buy = trade_flag(d.get("is_buy"), "is_buy")
+        start = trade_flag(d.get("start", False), "is_execution_start")
+        end = trade_flag(d.get("end", False), "is_execution_end")
         side = "ask" if is_buy else "bid"
         t = {"ts": e.ts_ns, "seq": e.seq, "price": price, "qty": qty, "side": side, "is_buy": is_buy,
              "passive_id": clean_id(d.get("passive_id")), "aggressor_id": clean_id(d.get("aggressor_id")),
-             "start": bool(d.get("start", False)), "end": bool(d.get("end", False))}
+             "start": start, "end": end}
         bar.trades.append(t)
         if bar.open_tick is None:
             bar.open_tick = bar.high_tick = bar.low_tick = price
@@ -1288,6 +1349,7 @@ class Engine:
         self._advance(event)  # Event at exact minute boundary belongs to the NEW candle.
         self.bar.max_lag_ms = max(self.bar.max_lag_ms, event.processing_lag_ms)
         observed = {}
+        rejected = False
         if not self.fault_reason:
             try:
                 if event.kind == "MBO":
@@ -1301,8 +1363,23 @@ class Engine:
                 if len(self.bar.trades) + len(self.bar.adds) + len(self.bar.reductions) > self.cfg.max_events_per_bar:
                     raise BookError("Per-candle memory guard exceeded; reload and tune capture capacity")
             except (BookError, ValueError, KeyError, TypeError) as exc:
+                rejected = True
+                self.store.rejected({
+                    "engine_version": VERSION, "alias": self.alias,
+                    "event_utc": utc(event.ts_ns), "event_ns_text": "ns:" + str(event.ts_ns),
+                    "ingest_seq": event.seq, "event_kind": event.kind,
+                    "timestamp_basis": self.timestamp_basis,
+                    "reason": str(exc), "exception_type": type(exc).__name__,
+                    "instrument": audit_json_value(self.metadata),
+                    "raw_fields": {k: {"value_repr": repr(v), "python_type": type(v).__name__}
+                                   for k, v in event.data.items()},
+                    "event": audit_json_value(asdict(event)),
+                    "policy": "Rejected; no guessed execution; disable/re-enable after correcting cause",
+                })
                 self.fault(str(exc), event.ts_ns)
         self._raw(event, observed)
+        if rejected:
+            self.store.flush()  # Persist the offending raw row as well as its fault.
         if event.kind == "PULSE":
             self.heartbeat(event.ts_ns)
         if event.kind == "STOP":
@@ -1883,14 +1960,15 @@ def replay(paths, output, config=None, quiet=False):
         for filename in files:
             with open(str(filename), newline="", encoding="utf-8-sig") as f:
                 for row in csv.DictReader(f):
-                    e = Event(**json.loads(row["normalized_event_json"]))
+                    e = Event(**decode_audit_json(json.loads(row["normalized_event_json"])))
                     if e.kind == "START":
                         if engine is not None:
                             raise ValueError("Replay one instrument/run at a time; multiple START records found")
                         cfg = config or Config(**e.data["config"]).validate()
                         store = CsvStore(output, e.data["alias"], cfg, {"mode": "REPLAY", "source_files": [str(x) for x in files]})
                         engine = Engine(e.data["alias"], e.ts_ns, cfg, store, None if quiet else print_display,
-                            e.data["tick_size"], e.data["timestamp_basis"])
+                            e.data["tick_size"], e.data["timestamp_basis"],
+                            metadata=e.data.get("metadata", {}))
                     elif engine is None:
                         raise ValueError("Missing START snapshot. Include all daily events files from the beginning of ONE run")
                     else:
