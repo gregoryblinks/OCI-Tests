@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 SECOND = 1_000_000_000
 MINUTE = 60 * SECOND
 SIDES = ("bid", "ask")
@@ -180,6 +180,28 @@ class BookError(RuntimeError):
     pass
 
 
+def whole_mbo_level(value, event_type, field_name, minimum):
+    """Accept native integers or exactly integral floats, never round/rescale.
+
+    Bookmap MBO price_level is already in ticks, not ES price points. This
+    compatibility conversion does not divide by pips or truncate fractions.
+    CANCEL never calls this helper: only its order ID is meaningful.
+    """
+    if isinstance(value, bool):
+        number = None
+    elif isinstance(value, int):
+        number = value
+    elif isinstance(value, float) and math.isfinite(value) and value.is_integer():
+        number = int(value)
+    else:
+        number = None
+    if number is None or number < minimum:
+        required = "positive" if minimum else "non-negative"
+        raise BookError("MBO %s: %s=%r (%s); expected %s integer level" % (
+            event_type, field_name, value, type(value).__name__, required))
+    return number
+
+
 class OrderBook:
     """Order membership and aggregate depth, not an exchange-priority queue."""
     def __init__(self):
@@ -236,21 +258,30 @@ class OrderBook:
     def apply(self, event_type, oid, price, qty, ts_ns, bootstrap=False):
         if not oid:
             raise BookError("Missing MBO order ID")
-        if not isinstance(price, int) or not isinstance(qty, int) or qty < 0:
-            raise BookError("MBO requires integer tick price and non-negative integer size")
         old = self.orders.get(oid)
-        if event_type in ("BID_NEW", "ASK_NEW"):
-            if qty <= 0:
-                raise BookError("NEW with zero size")
-            side = "bid" if event_type == "BID_NEW" else "ask"
-            if old is not None:
-                raise BookError("Duplicate NEW for a live order ID")
-            new = Order(side, price, qty, ts_ns, bootstrap)
-        elif event_type in ("REPLACE", "CANCEL"):
+        if event_type == "CANCEL":
+            # Removal is by ID. Callback price/size can be placeholders (e.g.
+            # -1 or None); neither determines the removed price or quantity.
+            # Use the last reconstructed order, as Bookmap's on_remove_order
+            # helper does. Unknown IDs still mean an incomplete/damaged book.
             if old is None:
-                raise BookError("Unknown order ID on " + event_type + "; resnapshot required")
-            new = None if event_type == "CANCEL" or qty == 0 else Order(
-                old.side, price, qty, old.born_ns, old.born_in_bootstrap)
+                raise BookError("Unknown order ID on CANCEL; resnapshot required")
+            new = None
+        elif event_type in ("BID_NEW", "ASK_NEW", "REPLACE"):
+            if event_type == "REPLACE" and old is None:
+                raise BookError("Unknown order ID on REPLACE; resnapshot required")
+            price = whole_mbo_level(price, event_type, "price_level", 1)
+            qty = whole_mbo_level(qty, event_type, "size_level", 0)
+            if event_type in ("BID_NEW", "ASK_NEW"):
+                if qty == 0:
+                    raise BookError("MBO %s: NEW with zero size" % event_type)
+                side = "bid" if event_type == "BID_NEW" else "ask"
+                if old is not None:
+                    raise BookError("Duplicate NEW for a live order ID")
+                new = Order(side, price, qty, ts_ns, bootstrap)
+            else:
+                new = None if qty == 0 else Order(
+                    old.side, price, qty, old.born_ns, old.born_in_bootstrap)
         else:
             raise BookError("Unsupported MBO event: " + str(event_type))
         if old:
@@ -1161,8 +1192,11 @@ class Engine:
 
     def _mbo(self, e):
         d, bar = e.data, self.bar
-        etype, oid = str(d["event_type"]), clean_id(d["order_id"])
-        price, qty = d["price"], d["qty"]
+        etype, oid = str(d["event_type"]), clean_id(d.get("order_id"))
+        # Missing cancellation placeholders are allowed; NEW/REPLACE missing
+        # fields are rejected by whole_mbo_level with field/type diagnostics.
+        # Leave e.data unchanged so raw values survive CSV logging and replay.
+        price, qty = d.get("price"), d.get("qty")
         boot = e.ts_ns < self.bootstrap_until
         old = self.book.orders.get(oid)
         near_old = self.book.is_near(old.side, old.price, self.cfg.near_ticks) if old else False
@@ -1508,7 +1542,7 @@ def run_floating_panel(folder, static=False, exact=False, owner_stdin=False,
     from tkinter import ttk
 
     root = tk.Tk()
-    root.title("ES Microstructure | " + ("OFFLINE PREVIEW" if static else (alias or "LIVE")))
+    root.title("ES Microstructure v" + VERSION + " | " + ("OFFLINE PREVIEW" if static else (alias or "LIVE")))
     root.geometry(geometry)
     root.minsize(650, 270)
     root.attributes("-topmost", topmost)
