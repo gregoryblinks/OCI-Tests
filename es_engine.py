@@ -17,6 +17,7 @@ import queue
 import random
 import re
 import statistics
+import subprocess
 import sys
 import threading
 import time
@@ -28,7 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 SECOND = 1_000_000_000
 MINUTE = 60 * SECOND
 SIDES = ("bid", "ask")
@@ -113,7 +114,19 @@ class Config:
     assumed_round_trip_cost_ticks: float = 2.0
     symbol_regex: str = r"^ES[HMUZ][0-9]{1,2}(?:[.@].*)?$"
 
+    auto_open_panel: bool = True
+    panel_topmost: bool = True
+    panel_geometry: str = "900x310+60+60"
+    panel_refresh_ms: int = 500
+
     def validate(self):
+        for name in ("auto_open_panel", "panel_topmost"):
+            if not isinstance(getattr(self, name), bool):
+                raise ValueError(name + " must be true or false")
+        if not isinstance(self.panel_refresh_ms, int) or isinstance(self.panel_refresh_ms, bool) or not 100 <= self.panel_refresh_ms <= 2000:
+            raise ValueError("panel_refresh_ms must be an integer in [100, 2000]")
+        if not isinstance(self.panel_geometry, str) or not re.fullmatch(r"[0-9]+x[0-9]+(?:[+-][0-9]+[+-][0-9]+)?", self.panel_geometry):
+            raise ValueError("panel_geometry must be WIDTHxHEIGHT or WIDTHxHEIGHT+X+Y")
         if self.lookback < 3 or not 3 <= self.min_baseline <= self.lookback:
             raise ValueError("Require 3 <= min_baseline <= lookback")
         if not 0 < self.low_percentile < 50 < self.high_percentile < 100:
@@ -1050,7 +1063,8 @@ class Engine:
         stale = self.last_mbo_ns is None or now - self.last_mbo_ns > self.cfg.stale_quote_seconds * SECOND
         self.store.heartbeat({"updated_utc": utc(now), "updated_ns_text": "ns:" + str(now),
             "last_callback_utc": utc(self.last_ns), "last_mbo_utc": utc(self.last_mbo_ns) if self.last_mbo_ns else "",
-            "fault": self.fault_reason, "stale_mbo": stale, "closed": self.closed})
+            "fault": self.fault_reason, "stale_mbo": stale, "closed": self.closed,
+            "bootstrap_until_ns_text": "ns:" + str(self.bootstrap_until)})
         if stale and not self.health_guarded and now >= self.bootstrap_until:
             self.health_guarded = True
             self._publish(Decision("DATA_QUALITY", 0, "STAND ASIDE", "MBO stale or absent; wait for fresh data and a valid completed candle"), now, "")
@@ -1281,6 +1295,297 @@ def print_display(display):
     print("\n".join(k + ": " + display[k] for k in ("STATE", "BIAS", "ACTION", "REASON", "TRIGGER / INVALIDATION")), flush=True)
 
 
+# The GUI lives in this same file so Bookmap may copy the script to a temporary
+# directory without losing a sibling live_panel.py dependency. Tk is imported
+# ONLY in the child process. No market-data callback executes GUI work.
+PANEL_FIELDS = ("STATE", "BIAS", "ACTION", "REASON", "TRIGGER / INVALIDATION")
+
+
+def panel_safe_display(reason, state="DATA_QUALITY"):
+    return dict(zip(PANEL_FIELDS, (state, "NEUTRAL", "WAIT" if state == "WARMUP" else "STAND ASIDE",
+                                   reason, "No active trigger")))
+
+
+def _panel_ns(value):
+    return int(str(value).replace("ns:", ""))
+
+
+def read_panel_display(folder, static=False, exact=False, now_ns=None):
+    """Read a run atomically; never substitute another run in automatic mode."""
+    folder = Path(folder).expanduser().resolve()
+    direct = folder / "latest.json"
+    if exact or direct.exists():
+        filename = direct
+    else:
+        paths = list(folder.rglob("latest.json"))
+        if not paths:
+            return panel_safe_display("Waiting for engine output", "WARMUP"), None
+        filename = max(paths, key=lambda p: p.stat().st_mtime_ns)
+    if not filename.exists():
+        return panel_safe_display("Waiting for engine output", "WARMUP"), None
+    with filename.open(encoding="utf-8") as f:
+        latest = json.load(f)
+    display = latest["display"]
+    if not isinstance(display, dict) or any(not isinstance(display.get(k), str) for k in PANEL_FIELDS):
+        raise ValueError("Malformed five-field display")
+    if static:
+        return display, filename
+    if filename.with_name("fatal_error.txt").exists():
+        return panel_safe_display("Engine worker failed; inspect fatal_error.txt and restart"), filename
+    if latest.get("timestamp_basis") != "LOCAL_ARRIVAL":
+        return panel_safe_display("Offline/synthetic output is not a live signal"), filename
+    with filename.with_name("health.json").open(encoding="utf-8") as f:
+        health = json.load(f)
+    if health.get("closed"):
+        return panel_safe_display("Engine stopped; fresh snapshot required on restart", "STOPPED"), filename
+    if health.get("fault"):
+        return panel_safe_display(str(health["fault"])), filename
+    now = time.time_ns() if now_ns is None else now_ns
+    health_age = now - _panel_ns(health["updated_ns_text"])
+    decision_age = now - _panel_ns(latest["updated_ns_text"])
+    if health_age < -SECOND or decision_age < -SECOND:
+        return panel_safe_display("Clock moved backwards; restart before interpreting signals"), filename
+    if health_age > 5 * SECOND:
+        return panel_safe_display("Feed/worker heartbeat stale; no live action"), filename
+    if decision_age > 75 * SECOND:
+        return panel_safe_display("Completed-candle decision is stale"), filename
+    # A fresh snapshot has not necessarily delivered MBO in its first few ms.
+    # Only a WAIT/WARMUP may be shown in this bounded bootstrap interval.
+    initial_wait = (display["STATE"] == "WARMUP" and display["ACTION"] == "WAIT"
+                    and now < _panel_ns(health.get("bootstrap_until_ns_text", "ns:0")))
+    if health.get("stale_mbo") and not initial_wait:
+        return panel_safe_display("MBO feed stale or absent; no live action"), filename
+    return display, filename
+
+
+def _panel_json(folder, name, value):
+    """UI diagnostics have separate files; never touch the CSV worker's files."""
+    path = Path(folder) / name
+    temp = path.with_name(path.name + ".%d.tmp" % os.getpid())
+    try:
+        with temp.open("w", encoding="utf-8") as f:
+            json.dump(value, f, indent=2, sort_keys=True)
+        os.replace(str(temp), str(path))
+    finally:
+        try:
+            temp.unlink()
+        except OSError:
+            pass
+
+
+class FloatingPanelProcess:
+    """One owned child per live runtime, with non-blocking start/stop requests.
+
+    The parent keeps the child's stdin pipe open. EOF closes the GUI even after
+    abrupt parent-process death. We neither send the Bookmap TCP port to the
+    child nor import Bookmap in it. Closing the window does not stop capture.
+    """
+    def __init__(self, alias, cfg):
+        self.alias, self.cfg = alias, cfg
+        self.folder, self.process, self.thread = None, None, None
+        self.lock = threading.Lock()
+        self.stopped = threading.Event()
+
+    def command(self):
+        executable = os.environ.get("ES_ENGINE_PANEL_PYTHON") or sys.executable
+        if not executable:
+            raise RuntimeError("Set ES_ENGINE_PANEL_PYTHON to a Python executable with Tkinter")
+        exe = Path(executable).expanduser()
+        # python.exe + CREATE_NO_WINDOW retains usable redirected stdin on Windows.
+        if exe.name.lower() == "pythonw.exe" and exe.with_name("python.exe").exists():
+            exe = exe.with_name("python.exe")
+        script = Path(__file__).resolve()
+        if not script.is_file():
+            raise RuntimeError("The running es_engine.py file must remain available to launch the panel")
+        command = [str(exe), str(script), "--panel", str(self.folder), "--exact-run", "--owner-stdin",
+                   "--alias", self.alias, "--geometry", self.cfg.panel_geometry,
+                   "--refresh-ms", str(self.cfg.panel_refresh_ms)]
+        if not self.cfg.panel_topmost:
+            command.append("--no-topmost")
+        return command
+
+    def start(self, folder):
+        override = os.environ.get("ES_ENGINE_AUTO_PANEL", "").strip().lower()
+        enabled = self.cfg.auto_open_panel
+        if override in ("0", "false", "no", "off"):
+            enabled = False
+        elif override in ("1", "true", "yes", "on"):
+            enabled = True
+        with self.lock:
+            if not enabled or self.thread is not None or self.stopped.is_set():
+                return
+            self.folder = Path(folder).expanduser().resolve()
+            self.thread = threading.Thread(target=self._supervise, name="ES-panel-" + self.alias, daemon=True)
+            self.thread.start()
+
+    def _record(self, state, detail=""):
+        try:
+            _panel_json(self.folder, "panel_process.json", {"status": state, "detail": detail,
+                "updated_utc": utc(time.time_ns()), "alias": self.alias,
+                "pid": self.process.pid if self.process is not None else None})
+        except OSError:
+            pass  # A GUI diagnostic failure must not interrupt market-data capture.
+
+    def _error(self, detail):
+        self._record("ERROR", detail)
+        print("Floating panel unavailable: " + detail + "; see panel_errors.log in " + str(self.folder)
+              + ". Capture and console output continue. Use Python with Tkinter; "
+                "ES_ENGINE_PANEL_PYTHON can select its executable.", file=sys.stderr, flush=True)
+
+    def _supervise(self):
+        child = None
+        try:
+            if self.stopped.is_set():
+                return
+            command = self.command()
+            kwargs = dict(stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, close_fds=True, shell=False)
+            if os.name == "nt":
+                kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+            else:
+                kwargs["start_new_session"] = True
+            with (self.folder / "panel_errors.log").open("a", encoding="utf-8") as errors:
+                child = subprocess.Popen(command, stderr=errors, **kwargs)
+                self.process = child
+                self._record("STARTING")
+                ready = False
+                started = time.monotonic()
+                while child.poll() is None and not self.stopped.wait(0.1):
+                    if not ready and (self.folder / "panel_status.json").exists():
+                        with (self.folder / "panel_status.json").open(encoding="utf-8") as f:
+                            ready = json.load(f).get("status") == "OPEN"
+                        if ready:
+                            self._record("OPEN")
+                    if not ready and time.monotonic() - started > 15:
+                        self._error("GUI did not report a visible window during startup")
+                        break
+                if child.poll() is not None:
+                    if child.returncode:
+                        self._error("GUI process exited with code " + str(child.returncode))
+                    else:
+                        self._record("CLOSED", "Window closed; reactivate the add-on to reopen")
+                else:
+                    # EOF is the graceful close request. The GUI never reads
+                    # Bookmap's own stdin/stdout communication channel.
+                    child.stdin.close()
+                    try:
+                        child.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        child.terminate()
+                        try:
+                            child.wait(timeout=1)
+                        except subprocess.TimeoutExpired:
+                            child.kill()
+                            child.wait(timeout=1)
+                    if self.stopped.is_set():
+                        self._record("CLOSED", "Add-on deactivated")
+        except Exception as exc:
+            self._error(str(exc))
+        finally:
+            if child is not None:
+                try:
+                    if child.stdin is not None and not child.stdin.closed:
+                        child.stdin.close()
+                    if child.poll() is None:
+                        child.terminate()
+                        child.wait(timeout=1)
+                except (OSError, subprocess.TimeoutExpired):
+                    try:
+                        child.kill()
+                        child.wait(timeout=1)
+                    except (OSError, subprocess.TimeoutExpired):
+                        pass
+
+    def stop(self, wait=False):
+        self.stopped.set()
+        if wait and self.thread is not None and self.thread is not threading.current_thread():
+            self.thread.join(timeout=5)
+
+
+def run_floating_panel(folder, static=False, exact=False, owner_stdin=False,
+                       alias="", geometry="900x310+60+60", refresh_ms=500, topmost=True):
+    """Tk runs in the GUI process's main thread, never in the feed worker."""
+    import tkinter as tk
+    from tkinter import ttk
+
+    root = tk.Tk()
+    root.title("ES Microstructure | " + ("OFFLINE PREVIEW" if static else (alias or "LIVE")))
+    root.geometry(geometry)
+    root.minsize(650, 270)
+    root.attributes("-topmost", topmost)
+    frame = ttk.Frame(root, padding=16)
+    frame.pack(fill="both", expand=True)
+    values, labels = {}, []
+    for row, name in enumerate(PANEL_FIELDS):
+        ttk.Label(frame, text=name, font=("TkDefaultFont", 10, "bold")).grid(
+            row=row, column=0, sticky="nw", padx=(0, 16), pady=7)
+        variable = tk.StringVar(value="")
+        values[name] = variable
+        label = ttk.Label(frame, textvariable=variable, wraplength=590, justify="left",
+                          font=("TkDefaultFont", 11, "bold" if name == "STATE" else "normal"))
+        label.grid(row=row, column=1, sticky="nw", pady=7)
+        labels.append(label)
+    frame.columnconfigure(1, weight=1)
+    owner_gone = threading.Event()
+    closing = [False]
+    folder = Path(folder).expanduser().resolve()
+
+    def status(state, detail=""):
+        if owner_stdin:
+            try:
+                _panel_json(folder, "panel_status.json", {"status": state, "detail": detail,
+                    "updated_utc": utc(time.time_ns()), "pid": os.getpid(), "alias": alias,
+                    "run_folder": str(folder), "geometry": root.geometry(), "topmost_requested": topmost})
+            except OSError:
+                pass
+
+    def close(reason="Window closed by user"):
+        if closing[0]:
+            return
+        closing[0] = True
+        status("CLOSED", reason)
+        root.destroy()
+
+    def watch_owner():
+        try:
+            # Never touch Tk from this thread. The GUI observes the event.
+            stream = getattr(sys.stdin, "buffer", sys.stdin)
+            if stream is not None:
+                while stream.read(1):
+                    pass
+        finally:
+            owner_gone.set()
+
+    def refresh():
+        if owner_gone.is_set():
+            close("Engine owner stopped or deactivated")
+            return
+        try:
+            display, filename = read_panel_display(folder, static, exact)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            display = panel_safe_display("Output unavailable: " + str(exc)[:120])
+        for name in PANEL_FIELDS:
+            values[name].set(display[name])
+        root.after(refresh_ms, refresh)
+
+    def resize(event):
+        if event.widget is root:
+            wrap = max(240, event.width - 265)
+            for label in labels:
+                label.configure(wraplength=wrap)
+
+    if owner_stdin:
+        threading.Thread(target=watch_owner, name="ES-panel-owner", daemon=True).start()
+    root.protocol("WM_DELETE_WINDOW", close)
+    root.bind("<Configure>", resize)
+    refresh()
+    if not closing[0]:
+        root.update_idletasks()
+        root.deiconify()
+        root.lift()
+        status("OPEN")
+        root.mainloop()
+
+
 class LiveRuntime:
     """Callbacks only timestamp and enqueue. One worker owns book and files."""
     def __init__(self, alias, cfg, output, metadata):
@@ -1290,6 +1595,8 @@ class LiveRuntime:
         self.lock = threading.Lock()
         self.seq, self.dropped = 0, 0
         self.emergency, self.engine, self.stopping = "", None, False
+        self.run_path = None
+        self.panel = FloatingPanelProcess(alias, cfg)
         self.worker = threading.Thread(target=self._run, name="ES-" + alias, daemon=True)
         self.worker.start()
 
@@ -1312,8 +1619,11 @@ class LiveRuntime:
         store = None
         try:
             store = CsvStore(self.output, self.alias, self.cfg, self.metadata)
+            self.run_path = store.path
             self.engine = Engine(self.alias, self.start_ns, self.cfg, store, print_display,
                 now_ns=time.time_ns, safety_check=lambda: self.emergency, metadata=self.metadata)
+            self.engine.heartbeat(time.time_ns())
+            self.panel.start(store.path)
             while not self.stopping or not self.queue.empty():
                 if self.emergency and not self.engine.fault_reason:
                     self.engine.fault(self.emergency + "; dropped=" + str(self.dropped), time.time_ns())
@@ -1341,11 +1651,13 @@ class LiveRuntime:
                     pass
 
     def stop(self, wait=True):
+        self.panel.stop(wait=False)
         with self.lock:
             self.stopping = True
         if not wait:
             return
         self.worker.join(timeout=15)
+        self.panel.stop(wait=True)
         if self.worker.is_alive():
             print_display(Decision("DATA_QUALITY", 0, "STAND ASIDE", "Shutdown did not drain; trailing records may be incomplete").display())
 
@@ -1558,6 +1870,24 @@ def replay(paths, output, config=None, quiet=False):
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--panel":
+        parser = argparse.ArgumentParser(description="Five-field ES floating display")
+        parser.add_argument("--panel", required=True, metavar="RUN_FOLDER")
+        parser.add_argument("--exact-run", action="store_true")
+        parser.add_argument("--owner-stdin", action="store_true", help=argparse.SUPPRESS)
+        parser.add_argument("--alias", default="")
+        parser.add_argument("--geometry", default="900x310+60+60")
+        parser.add_argument("--refresh-ms", type=int, default=500)
+        parser.add_argument("--no-topmost", action="store_true")
+        parser.add_argument("--static", action="store_true", help="OFFLINE preview; disables live freshness checks")
+        args = parser.parse_args()
+        if not 100 <= args.refresh_ms <= 2000:
+            parser.error("--refresh-ms must be in [100, 2000]")
+        if args.owner_stdin and (args.static or not args.exact_run):
+            parser.error("Owned panels require --exact-run and prohibit --static")
+        run_floating_panel(args.panel, args.static, args.exact_run, args.owner_stdin,
+                           args.alias, args.geometry, args.refresh_ms, not args.no_topmost)
+        return
     # Bookmap supplies a TCP port as argv[1]; do NOT consume it with argparse.
     if len(sys.argv) > 1 and sys.argv[1].startswith("--"):
         parser = argparse.ArgumentParser(description=__doc__)
