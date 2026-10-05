@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-VERSION = "1.1.2"
+VERSION = "1.1.3"
 SECOND = 1_000_000_000
 MINUTE = 60 * SECOND
 SIDES = ("bid", "ask")
@@ -114,12 +114,18 @@ class Config:
     assumed_round_trip_cost_ticks: float = 2.0
     symbol_regex: str = r"^ES[HMUZ][0-9]{1,2}(?:[.@].*)?$"
 
+    # AUDIT_SKIP does not assume why a zero-size callback was sent. It is
+    # excluded from executions, counted, and fences execution-batch grouping.
+    # STRICT retains the prior stop-on-zero policy for diagnostic comparison.
+    zero_size_trade_policy: str = "AUDIT_SKIP"
     auto_open_panel: bool = True
     panel_topmost: bool = True
     panel_geometry: str = "900x310+60+60"
     panel_refresh_ms: int = 500
 
     def validate(self):
+        if self.zero_size_trade_policy not in ("AUDIT_SKIP", "STRICT"):
+            raise ValueError("zero_size_trade_policy must be AUDIT_SKIP or STRICT")
         for name in ("auto_open_panel", "panel_topmost"):
             if not isinstance(getattr(self, name), bool):
                 raise ValueError(name + " must be true or false")
@@ -350,6 +356,7 @@ class MemoryStore:
         self.rows = defaultdict(list)
         self.latest_value = None
         self.rejected_value = None
+        self.zero_trade_value = None
         self.path = None
 
     def write(self, table, row, ts_ns):
@@ -360,6 +367,9 @@ class MemoryStore:
 
     def rejected(self, data):
         self.rejected_value = dict(data)
+
+    def zero_trade(self, data):
+        self.zero_trade_value = dict(data)
 
     def heartbeat(self, data):
         pass
@@ -407,7 +417,8 @@ class CsvStore:
             "sources": SOURCES, "source_verification_date": "2026-10-05", "metadata": metadata or {},
             "timestamp_basis": "LOCAL_ARRIVAL unless explicitly replay/synthetic",
             "warnings": ["Research signals, not validated trading performance", "No exchange sequence or PriorityID",
-                         "Snapshot completion is heuristic", "Removals are not automatically cancellations"],
+                         "Snapshot completion is heuristic", "Removals are not automatically cancellations",
+                         "AUDIT_SKIP excludes zero-size trade callbacks without certifying their upstream meaning"],
         }
         self._atomic("manifest.json", manifest)
 
@@ -447,6 +458,9 @@ class CsvStore:
 
     def rejected(self, data):
         self._atomic("rejected_event.json", data)
+
+    def zero_trade(self, data):
+        self._atomic("zero_size_trade_event.json", data)
 
     def heartbeat(self, data):
         self._atomic("health.json", data)
@@ -636,11 +650,17 @@ def execution_batches(bar, cfg, store, alias):
               "buy_max_batch_qty": 0, "sell_max_batch_qty": 0, "incomplete_batches": 0}
     active = None
     for t in bar.trades:
+        # A skipped zero-size callback is NOT interpreted as a batch start/end.
+        # Do not join positive-size prints across an unexplained observation.
+        segment = t.get("batch_segment", 0)
+        if active and segment != active["batch_segment"]:
+            result["incomplete_batches"] += 1
+            active = None
         if t["start"]:
             if active:
                 result["incomplete_batches"] += 1
             active = {"start": t["ts"], "is_buy": t["is_buy"], "low": t["price"], "high": t["price"],
-                      "qty": 0, "prints": 0, "aggressor_id": t["aggressor_id"]}
+                      "qty": 0, "prints": 0, "aggressor_id": t["aggressor_id"], "batch_segment": segment}
         if active:
             if t["is_buy"] != active["is_buy"]:
                 result["incomplete_batches"] += 1
@@ -692,6 +712,8 @@ def measure_bar(bar, book, cfg, store, alias, tick_size, timestamp_basis):
         reasons.add("SNAPSHOT_GUARD")
     if not volume:
         reasons.add("NO_TRADES")
+        if bar.counts["zero_size_trade"]:
+            reasons.add("NO_POSITIVE_SIZE_TRADES")
     if coverage < cfg.min_quote_coverage:
         reasons.add("QUOTE_COVERAGE_LOW")
     end_bid, end_ask = book.best("bid"), book.best("ask")
@@ -715,6 +737,11 @@ def measure_bar(bar, book, cfg, store, alias, tick_size, timestamp_basis):
         "volume": volume, "buy_volume": buy, "sell_volume": sell, "delta": delta,
         "delta_ratio": ratio(delta, volume), "abs_delta": abs(delta), "abs_delta_ratio": ratio(abs(delta), volume),
         "trade_count": len(bar.trades), "otc_ignored_count": bar.counts["otc"],
+        "zero_size_trade_count": bar.counts["zero_size_trade"],
+        "onbook_trade_callback_count": len(bar.trades) + bar.counts["zero_size_trade"],
+        "zero_size_trade_fraction": ratio(bar.counts["zero_size_trade"], len(bar.trades) + bar.counts["zero_size_trade"]),
+        "zero_size_trade_policy": cfg.zero_size_trade_policy,
+        "data_warnings": "ZERO_SIZE_TRADES_SKIPPED_UNVERIFIED" if bar.counts["zero_size_trade"] else "",
         "mbo_event_count": bar.counts["mbo"], "new_count": bar.counts["new"],
         "replace_count": bar.counts["replace"], "cancel_event_count": bar.counts["cancel"],
         "unique_known_aggressor_order_ids": len(set(t["aggressor_id"] for t in bar.trades if t["aggressor_id"])),
@@ -1109,6 +1136,10 @@ class Engine:
         self.start_ns, self.last_ns, self.last_seq = start_ns, start_ns, 0
         self.bootstrap_until = start_ns + int(self.cfg.bootstrap_seconds * SECOND)
         self.last_mbo_ns = None
+        self.last_positive_trade_ns = None
+        self.last_zero_size_trade_ns = None
+        self.positive_trade_count_total = 0
+        self.zero_size_trade_count_total = 0
         self.last_heartbeat_ns = 0
         self.fault_reason, self.closed, self.health_guarded = "", False, False
         self.previous_close = None
@@ -1144,6 +1175,15 @@ class Engine:
         self._publish(Decision("DATA_QUALITY", 0, "STAND ASIDE", reason[:160]), ts, "")
         self.store.flush()
 
+    def _trade_health(self):
+        return {
+            "positive_trade_count_total": self.positive_trade_count_total,
+            "zero_size_trade_count_total": self.zero_size_trade_count_total,
+            "last_positive_trade_utc": utc(self.last_positive_trade_ns) if self.last_positive_trade_ns is not None else "",
+            "last_zero_size_trade_utc": utc(self.last_zero_size_trade_ns) if self.last_zero_size_trade_ns is not None else "",
+            "zero_size_trade_policy": self.cfg.zero_size_trade_policy,
+        }
+
     def heartbeat(self, now):
         if now - self.last_heartbeat_ns < SECOND:
             return
@@ -1152,7 +1192,7 @@ class Engine:
         self.store.heartbeat({"updated_utc": utc(now), "updated_ns_text": "ns:" + str(now),
             "last_callback_utc": utc(self.last_ns), "last_mbo_utc": utc(self.last_mbo_ns) if self.last_mbo_ns else "",
             "fault": self.fault_reason, "stale_mbo": stale, "closed": self.closed,
-            "bootstrap_until_ns_text": "ns:" + str(self.bootstrap_until)})
+            "bootstrap_until_ns_text": "ns:" + str(self.bootstrap_until), **self._trade_health()})
         if stale and not self.health_guarded and now >= self.bootstrap_until:
             self.health_guarded = True
             self._publish(Decision("DATA_QUALITY", 0, "STAND ASIDE", "MBO stale or absent; wait for fresh data and a valid completed candle"), now, "")
@@ -1214,6 +1254,16 @@ class Engine:
         m["decision_available_utc"], m["decision_latency_ms"] = utc(available), delay_ms
         b = self.benchmarks.compute(m)  # Deliberately BEFORE append(m).
         d = self.fsm.decide(m, b)
+        if m["zero_size_trade_count"]:
+            n = m["zero_size_trade_count"]
+            d.reason += "; %d zero-size callbacks skipped" % n
+            d.rules = dict(d.rules, zero_size_trade_policy=self.cfg.zero_size_trade_policy,
+                           zero_size_trade_count=n, data_warnings=m["data_warnings"])
+            self.store.write("quality", {"alias": self.alias, "utc": utc(bar.end),
+                "code": "ZERO_SIZE_TRADE_SUMMARY",
+                "detail": "%d zero-size callbacks excluded; %d positive-size trades; zero share %.6f; upstream meaning unverified" % (
+                    n, m["trade_count"], m["zero_size_trade_fraction"]),
+                "sticky": False, "action": "Review callback diagnostics and compare positive-size volume with the source"}, bar.start)
         signal_id = self.alias + ":" + str(bar.end)
         self.outcomes.bar(m, bar.end)  # Resolve old signals before registering this signal.
         self.store.write("minutes", dict(m, **b), bar.start)
@@ -1226,6 +1276,7 @@ class Engine:
             "previous_state": d.previous_state, "raw_candidate": d.raw_candidate,
             "candidate_count": d.candidate_count, "state_age_bars": d.state_age,
             "baseline_n": b["baseline_n"], "data_valid": m["data_valid"], "quality_flags": m["quality_flags"],
+            "data_warnings": m["data_warnings"], "zero_size_trade_count": m["zero_size_trade_count"],
             "rules_json": d.rules, "episode_json": d.episode,
             "strategy_version": VERSION, "timestamp_basis": self.timestamp_basis,
         }, bar.start)
@@ -1285,6 +1336,45 @@ class Engine:
                 "old_qty": old.qty if old else None, "new_price": new.price if new else None,
                 "new_qty": new.qty if new else None, "pre_bid": pre_bid, "pre_ask": pre_ask}
 
+    def _zero_size_trade(self, e):
+        """Audit a zero-size callback, without declaring it an execution/marker.
+
+        Positive reported volume remains usable under the explicit AUDIT_SKIP
+        policy. This does NOT recover missing/corrected volume upstream or
+        establish that the feed is complete. Warnings and counts survive in the
+        minute/decision audit. Only zero callbacks in a candle cannot make a
+        valid candle. No book quantity, price, or trigger is changed here.
+        """
+        bar, d = self.bar, e.data
+        bar.counts["zero_size_trade"] += 1
+        self.zero_size_trade_count_total += 1
+        self.last_zero_size_trade_ns = e.ts_ns
+        first = bar.counts["zero_size_trade"] == 1
+        if first:
+            # Bound atomic file writes and quality warnings to one sample per
+            # minute. Every callback (not just the sample) remains in events.csv.
+            self.store.zero_trade({
+                "engine_version": VERSION, "alias": self.alias,
+                "event_utc": utc(e.ts_ns), "event_ns_text": "ns:" + str(e.ts_ns),
+                "bar_start_utc": utc(bar.start), "ingest_seq": e.seq,
+                "event_kind": e.kind, "timestamp_basis": self.timestamp_basis,
+                "classification": "ZERO_SIZE_TRADE_SKIPPED",
+                "policy": self.cfg.zero_size_trade_policy,
+                "upstream_semantics_verified": False,
+                "quantity_imputed": False, "batch_policy": "FENCE; do not infer start/end",
+                "instrument": audit_json_value(self.metadata),
+                "raw_fields": {k: {"value_repr": repr(v), "python_type": type(v).__name__}
+                               for k, v in d.items()},
+                "event": audit_json_value(asdict(e)),
+            })
+            self.store.write("quality", {"alias": self.alias, "utc": utc(e.ts_ns),
+                "code": "ZERO_SIZE_TRADE_SKIPPED",
+                "detail": "size_level=%r (%s); excluded from executions under AUDIT_SKIP; no volume or price inferred; batch grouping fenced" % (
+                    d.get("qty"), type(d.get("qty")).__name__),
+                "sticky": False, "action": "Continue positive-size trades; review zero_size_trade_event.json; see per-minute counts"}, e.ts_ns)
+        return {"price": d.get("price"), "qty": d.get("qty"),
+                "classification": "ZERO_SIZE_TRADE_SKIPPED", "_flush_audit": first}
+
     def _trade(self, e):
         d, bar = e.data, self.bar
         # Explicit OTC events are outside this on-book execution analysis.
@@ -1293,9 +1383,18 @@ class Engine:
         # volume, OHLC, order matching, batch boundaries, or trigger outcomes.
         if trade_flag(d.get("is_otc", False), "is_otc"):
             bar.counts["otc"] += 1
-            return {"price": d.get("price"), "qty": d.get("qty")}
+            return {"price": d.get("price"), "qty": d.get("qty"), "classification": "OTC_EXCLUDED"}
+        raw_qty = d.get("qty")
+        if (self.cfg.zero_size_trade_policy == "AUDIT_SKIP"
+                and not isinstance(raw_qty, bool) and isinstance(raw_qty, (int, float))
+                and raw_qty == 0):
+            # A zero-size callback cannot supply a positive execution quantity.
+            # Its price/side/flags are retained as diagnostics, not validated as
+            # an execution or used to infer market movement. bool False is NOT 0.
+            return self._zero_size_trade(e)
         # Keep e.data untouched for the callback audit. No int(qty) shortcut:
-        # fractional, zero/negative and boolean sizes must not become trades.
+        # Fractional, negative and boolean sizes must not become trades.
+        # STRICT also rejects zero as in v1.1.2.
         qty = whole_level(d.get("qty"), "TRADE", "size_level", 1, "whole ES contracts")
         price = whole_level(d.get("price"), "TRADE", "price_level", 1, "whole ES tick price")
         is_buy = trade_flag(d.get("is_buy"), "is_buy")
@@ -1304,8 +1403,10 @@ class Engine:
         side = "ask" if is_buy else "bid"
         t = {"ts": e.ts_ns, "seq": e.seq, "price": price, "qty": qty, "side": side, "is_buy": is_buy,
              "passive_id": clean_id(d.get("passive_id")), "aggressor_id": clean_id(d.get("aggressor_id")),
-             "start": start, "end": end}
+             "start": start, "end": end, "batch_segment": bar.counts["zero_size_trade"]}
         bar.trades.append(t)
+        self.positive_trade_count_total += 1
+        self.last_positive_trade_ns = e.ts_ns
         if bar.open_tick is None:
             bar.open_tick = bar.high_tick = bar.low_tick = price
         bar.close_tick = price
@@ -1316,13 +1417,14 @@ class Engine:
         self.outcomes.trade(e.ts_ns, price)
         # DO NOT mutate the book on trades: the MBO update already supplies
         # the displayed-size change, in either arrival order.
-        return {"side": side, "price": price, "qty": qty, "order_id": t["passive_id"]}
+        return {"side": side, "price": price, "qty": qty, "order_id": t["passive_id"], "classification": "POSITIVE_SIZE_TRADE"}
 
     def _raw(self, event, observed):
         self.store.write("events", {
             "alias": self.alias, "event_utc": utc(event.ts_ns), "event_ns_text": "ns:" + str(event.ts_ns),
             "ingest_seq": event.seq, "kind": event.kind, "timestamp_basis": self.timestamp_basis,
             "processing_lag_ms": event.processing_lag_ms, "bootstrap_guard": event.ts_ns < self.bootstrap_until,
+            "processing_classification": observed.get("classification", ""),
             "order_id_text": "id:" + observed.get("order_id", ""), "event_type": observed.get("event_type", ""),
             "side": observed.get("side", ""), "price_tick": observed.get("price"), "quantity": observed.get("qty"),
             "old_price_tick": observed.get("old_price"), "old_quantity": observed.get("old_qty"),
@@ -1378,8 +1480,8 @@ class Engine:
                 })
                 self.fault(str(exc), event.ts_ns)
         self._raw(event, observed)
-        if rejected:
-            self.store.flush()  # Persist the offending raw row as well as its fault.
+        if rejected or observed.get("_flush_audit"):
+            self.store.flush()  # Persist rejected/first-zero raw row and its diagnostic.
         if event.kind == "PULSE":
             self.heartbeat(event.ts_ns)
         if event.kind == "STOP":
@@ -1397,7 +1499,7 @@ class Engine:
         self._publish(Decision("STOPPED", 0, "STAND ASIDE", "Engine stopped; pending horizons censored; fresh snapshot required on restart"), ts, "")
         self.store.heartbeat({"updated_utc": utc(ts), "updated_ns_text": "ns:" + str(ts),
             "last_callback_utc": utc(self.last_ns), "last_mbo_utc": utc(self.last_mbo_ns) if self.last_mbo_ns else "",
-            "fault": self.fault_reason, "stale_mbo": True, "closed": True})
+            "fault": self.fault_reason, "stale_mbo": True, "closed": True, **self._trade_health()})
         self.store.flush(self.cfg.fsync_at_bar_close)
         self.store.close()
 
