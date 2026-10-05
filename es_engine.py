@@ -26,10 +26,11 @@ import uuid
 from collections import Counter, defaultdict, deque
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-VERSION = "1.1.3"
+VERSION = "1.2.0"
 SECOND = 1_000_000_000
 MINUTE = 60 * SECOND
 SIDES = ("bid", "ask")
@@ -43,10 +44,20 @@ SOURCES = {
 }
 
 
+@lru_cache(maxsize=512)
+def _utc_second(sec):
+    return datetime.fromtimestamp(sec, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+
+
+@lru_cache(maxsize=8)
+def _utc_day(day):
+    return datetime.fromtimestamp(day * 86400, timezone.utc).strftime("%Y-%m-%d")
+
+
 def utc(ns):
     # Do not pass nanoseconds through a float: Excel-safe ISO text preserves them.
     sec, nano = divmod(int(ns), SECOND)
-    return datetime.fromtimestamp(sec, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S") + ".%09dZ" % nano
+    return _utc_second(sec) + ".%09dZ" % nano
 
 
 def clean_id(value):
@@ -110,6 +121,9 @@ class Config:
     max_events_per_bar: int = 1000000
     event_queue_capacity: int = 200000
     log_full_book_levels: bool = True
+    async_csv_logging: bool = True
+    csv_queue_capacity: int = 200000
+    csv_batch_size: int = 512
     fsync_at_bar_close: bool = False
     assumed_round_trip_cost_ticks: float = 2.0
     symbol_regex: str = r"^ES[HMUZ][0-9]{1,2}(?:[.@].*)?$"
@@ -126,7 +140,7 @@ class Config:
     def validate(self):
         if self.zero_size_trade_policy not in ("AUDIT_SKIP", "STRICT"):
             raise ValueError("zero_size_trade_policy must be AUDIT_SKIP or STRICT")
-        for name in ("auto_open_panel", "panel_topmost"):
+        for name in ("auto_open_panel", "panel_topmost", "async_csv_logging"):
             if not isinstance(getattr(self, name), bool):
                 raise ValueError(name + " must be true or false")
         if not isinstance(self.panel_refresh_ms, int) or isinstance(self.panel_refresh_ms, bool) or not 100 <= self.panel_refresh_ms <= 2000:
@@ -138,8 +152,9 @@ class Config:
         if not 0 < self.low_percentile < 50 < self.high_percentile < 100:
             raise ValueError("Require 0 < low_percentile < 50 < high_percentile < 100")
         for name in ("near_ticks", "context_bars", "confirmation_bars", "episode_ttl_bars",
-                     "max_spread_ticks", "max_events_per_bar", "event_queue_capacity", "min_book_orders"):
-            if not isinstance(getattr(self, name), int) or getattr(self, name) <= 0:
+                     "max_spread_ticks", "max_events_per_bar", "event_queue_capacity", "min_book_orders",
+                     "csv_queue_capacity", "csv_batch_size"):
+            if isinstance(getattr(self, name), bool) or not isinstance(getattr(self, name), int) or getattr(self, name) <= 0:
                 raise ValueError(name + " must be a positive integer")
         for name in ("min_quote_coverage", "min_passive_id_coverage", "min_execution_match_coverage",
                      "max_boundary_reduction_share", "acceptance_fraction", "absorption_range_fraction", "max_wide_spread_fraction"):
@@ -152,6 +167,8 @@ class Config:
         for name in ("trigger_buffer_ticks", "invalidation_buffer_ticks"):
             if not isinstance(getattr(self, name), int) or getattr(self, name) < 1:
                 raise ValueError(name + " must be a positive integer")
+        if self.csv_batch_size > self.csv_queue_capacity:
+            raise ValueError("csv_batch_size must not exceed csv_queue_capacity")
         re.compile(self.symbol_regex)
         return self
 
@@ -256,6 +273,7 @@ class OrderBook:
         self.levels = {s: {} for s in SIDES}
         self.counts = {s: {} for s in SIDES}
         self.heaps = {s: [] for s in SIDES}
+        self.near_cache = {s: {} for s in SIDES}
 
     def _level(self, side, price, qty_delta, count_delta):
         levels, counts = self.levels[side], self.counts[side]
@@ -271,6 +289,16 @@ class OrderBook:
         else:
             levels.pop(price, None)
             counts.pop(price, None)
+        # Cached near-touch totals are exact, not sampled. Invalidate when the
+        # best changes; otherwise a single level delta updates each cached width.
+        best = self.best(side)
+        for width, (cached_best, total) in list(self.near_cache[side].items()):
+            if best != cached_best:
+                del self.near_cache[side][width]
+            elif best is not None:
+                distance = best - price if side == "bid" else price - best
+                if 0 <= distance < width:
+                    self.near_cache[side][width] = (best, total + qty_delta)
         if len(self.heaps[side]) > 4 * len(levels) + 1024:
             self.heaps[side] = [-p if side == "bid" else p for p in levels]
             heapq.heapify(self.heaps[side])
@@ -288,8 +316,13 @@ class OrderBook:
         best = self.best(side)
         if best is None:
             return 0
+        cached = self.near_cache[side].get(width)
+        if cached is not None and cached[0] == best:
+            return cached[1]
         step = -1 if side == "bid" else 1
-        return sum(self.levels[side].get(best + step * i, 0) for i in range(width))
+        total = sum(self.levels[side].get(best + step * i, 0) for i in range(width))
+        self.near_cache[side][width] = (best, total)
+        return total
 
     def is_near(self, side, price, width):
         best = self.best(side)
@@ -331,12 +364,19 @@ class OrderBook:
                     old.side, price, qty, old.born_ns, old.born_in_bootstrap)
         else:
             raise BookError("Unsupported MBO event: " + str(event_type))
-        if old:
-            self._level(old.side, old.price, -old.qty, -1)
+        if old and new and old.price == new.price:
+            self._level(old.side, old.price, new.qty - old.qty, 0)
+            # Preserve the original membership iteration order. This is NOT
+            # exchange priority, but deterministic demo/replay tooling uses it.
             del self.orders[oid]
-        if new:
-            self._level(new.side, new.price, new.qty, 1)
             self.orders[oid] = new
+        else:
+            if old:
+                self._level(old.side, old.price, -old.qty, -1)
+                del self.orders[oid]
+            if new:
+                self._level(new.side, new.price, new.qty, 1)
+                self.orders[oid] = new
         moved = bool(old and new and old.price != new.price)
         reduced = old.qty if old and (new is None or moved) else max(0, old.qty - new.qty) if old else 0
         added = new.qty if new and (old is None or moved) else max(0, new.qty - old.qty) if new else 0
@@ -430,7 +470,7 @@ class CsvStore:
         os.replace(str(temp), str(target))
 
     def write(self, table, row, ts_ns):
-        day = utc(ts_ns)[:10]
+        day = _utc_day(int(ts_ns) // (86400 * SECOND))
         keys = tuple(row.keys())
         if table in self.schemas and self.schemas[table] != keys:
             raise RuntimeError("CSV schema drift in " + table)
@@ -442,16 +482,16 @@ class CsvStore:
             filename = folder / (table + ".csv")
             exists = filename.exists() and filename.stat().st_size > 0
             f = open(str(filename), "a" if exists else "w", newline="", encoding="utf-8" if exists else "utf-8-sig")
-            writer = csv.DictWriter(f, fieldnames=keys, extrasaction="raise")
+            writer = csv.writer(f)
             if not exists:
-                writer.writeheader()
+                writer.writerow(keys)
             self.handles[key] = (f, writer)
             if len(self.handles) > 32:
                 oldest = next(iter(self.handles))
                 old_file, _ = self.handles.pop(oldest)
                 old_file.flush()
                 old_file.close()
-        self.handles[key][1].writerow({k: safe_cell(v) for k, v in row.items()})
+        self.handles[key][1].writerow([safe_cell(v) for v in row.values()])
 
     def latest(self, data):
         self._atomic("latest.json", data)
@@ -476,6 +516,155 @@ class CsvStore:
             f.flush()
             f.close()
         self.handles.clear()
+
+
+class AsyncCsvStore(CsvStore):
+    """Bounded, ordered CSV batches on a dedicated writer thread in live mode.
+
+    JSON health/display files stay on the engine thread. CSV formatting and disk
+    writes do not stop MBO reconstruction. A full queue or write failure is fatal,
+    never an instruction to silently discard audit rows. flush() schedules an
+    ordered flush; drain()/close() wait and verify it. RAM buffering is NOT a
+    crash-durable journal. fsync_at_bar_close uses an explicit blocking barrier.
+    """
+    def __init__(self, root, alias, config, metadata=None):
+        super().__init__(root, alias, config, metadata)
+        self.capacity, self.batch_size = config.csv_queue_capacity, config.csv_batch_size
+        self._jobs = queue.Queue(maxsize=max(4, self.capacity // self.batch_size + 8))
+        self._state_lock = threading.Lock()
+        self._pending = []
+        self._outstanding, self._highwater, self._written = 0, 0, 0
+        self._oldest_ns, self._writer_error = 0, ''
+        self._closing = False
+        self._writer = threading.Thread(target=self._write_loop, name='ES-CSV-' + alias, daemon=True)
+        self._writer.start()
+
+    def _fail(self, detail):
+        with self._state_lock:
+            if not self._writer_error:
+                self._writer_error = detail
+        try:
+            (self.path / 'fatal_error.txt').write_text(detail, encoding='utf-8')
+        except OSError:
+            pass
+
+    def _check(self):
+        if self._writer_error:
+            raise RuntimeError(self._writer_error)
+
+    def _submit(self, job):
+        self._check()
+        try:
+            self._jobs.put_nowait(job)
+        except queue.Full:
+            self._fail('CSV_QUEUE_OVERFLOW; audit cannot keep up; run is unsafe')
+            self._check()
+
+    def write(self, table, row, ts_ns):
+        self._check()
+        if self._closing:
+            raise RuntimeError('CSV writer is closed')
+        with self._state_lock:
+            overflow = self._outstanding >= self.capacity
+            if not overflow:
+                self._outstanding += 1
+                self._highwater = max(self._highwater, self._outstanding)
+                if self._outstanding == 1:
+                    self._oldest_ns = time.monotonic_ns()
+        if overflow:
+            self._fail('CSV_QUEUE_OVERFLOW; audit cannot keep up; run is unsafe')
+            self._check()
+        self._pending.append((table, row, ts_ns))
+        if len(self._pending) >= self.batch_size:
+            self._send_batch()
+
+    def _send_batch(self):
+        if self._pending:
+            batch, self._pending = self._pending, []
+            self._submit(('ROWS', batch, None))
+
+    def _write_loop(self):
+        try:
+            while True:
+                kind, payload, barrier = self._jobs.get()
+                try:
+                    if kind == 'ROWS':
+                        for table, row, ts_ns in payload:
+                            CsvStore.write(self, table, row, ts_ns)
+                        with self._state_lock:
+                            self._outstanding -= len(payload)
+                            self._written += len(payload)
+                            if not self._outstanding:
+                                self._oldest_ns = 0
+                    elif kind == 'FLUSH':
+                        CsvStore.flush(self, payload)
+                    elif kind == 'CLOSE':
+                        CsvStore.close(self)
+                        return
+                except Exception as exc:
+                    # Publish failure before waking a drain/close waiter.
+                    self._fail('CSV_WRITE_FAILURE: ' + str(exc) + '\n' + traceback.format_exc())
+                    raise
+                finally:
+                    if barrier is not None:
+                        barrier.set()
+                    self._jobs.task_done()
+        except Exception as exc:
+            self._fail('CSV_WRITE_FAILURE: ' + str(exc) + '\n' + traceback.format_exc())
+            try:
+                CsvStore.close(self)
+            except Exception:
+                pass
+
+    def diagnostics(self):
+        with self._state_lock:
+            return {'csv_queue_rows': self._outstanding, 'csv_queue_capacity': self.capacity,
+                    'csv_queue_highwater': self._highwater, 'csv_rows_written': self._written,
+                    # Busy duration is NOT the age of the oldest row: the writer
+                    # can be draining continuously. Do not misuse it as latency.
+                    'csv_busy_ms': ((time.monotonic_ns() - self._oldest_ns) / 1e6 if self._oldest_ns else 0),
+                    'csv_writer_error': self._writer_error, 'csv_async': True}
+
+    def _barrier(self, kind, payload=None, timeout=30.0):
+        self._send_batch()
+        barrier = threading.Event()
+        self._submit((kind, payload, barrier))
+        deadline = time.monotonic() + timeout
+        while not barrier.wait(.02):
+            self._check()
+            if time.monotonic() >= deadline:
+                self._fail('CSV_DRAIN_TIMEOUT; trailing audit may be incomplete')
+                self._check()
+        self._check()
+
+    def flush(self, durable=False):
+        if self._closing:
+            return
+        if durable:
+            self._barrier('FLUSH', True)
+        else:
+            self._send_batch()
+            self._submit(('FLUSH', False, None))
+
+    def drain(self, timeout=30.0):
+        self._barrier('FLUSH', False, timeout)
+
+    def close(self):
+        if self._closing:
+            return
+        if self._writer_error:
+            self._closing = True
+            # The writer exits itself on IO failure. On producer-side overflow,
+            # do not race its handles; ask it to drain already accepted batches.
+            try:
+                self._jobs.put(('CLOSE', None, None), timeout=1)
+            except queue.Full:
+                pass
+            self._writer.join(timeout=2)
+            return
+        self._barrier('CLOSE')
+        self._closing = True
+        self._writer.join(timeout=2)
 
 
 FLOW_KEYS = ("added", "reduced", "snapshot_added", "snapshot_reduced", "reprice_in", "reprice_out",
@@ -504,6 +693,8 @@ class Bar:
     low_tick: Optional[int] = None
     close_tick: Optional[int] = None
     max_lag_ms: float = 0.0
+    flow_tracker: Any = None
+    batch_tracker: Any = None
 
     @property
     def end(self):
@@ -553,6 +744,8 @@ def attribute_flows(bar, cfg, store, alias):
     estimate of withdrawal, not a confirmed cancellation. Price-only matching
     is optional and never upgrades the passive-ID coverage quality gate.
     """
+    if bar.flow_tracker is not None:
+        return bar.flow_tracker.finish()
     groups = defaultdict(deque)
     for t in bar.trades:
         key = (t["side"], t["price"], t["passive_id"])
@@ -646,6 +839,8 @@ def attribute_flows(bar, cfg, store, alias):
 
 
 def execution_batches(bar, cfg, store, alias):
+    if bar.batch_tracker is not None:
+        return bar.batch_tracker.finish()
     result = {"buy_sweep_count": 0, "sell_sweep_count": 0,
               "buy_max_batch_qty": 0, "sell_max_batch_qty": 0, "incomplete_batches": 0}
     active = None
@@ -685,6 +880,179 @@ def execution_batches(bar, cfg, store, alias):
     if active:
         result["incomplete_batches"] += 1
     return result
+
+
+class FlowTracker:
+    """Same-bar correlation spread across events, instead of a close-time burst.
+
+    Reductions mature ONLY after their full forward match window. At an exact
+    deadline all equal-timestamp trades are admitted before matching. At close,
+    only the already observed trades in that candle are eligible. This preserves
+    the original batch algorithm, including removal-before-trade delivery.
+    """
+    def __init__(self, bar, cfg, store, alias):
+        self.bar, self.cfg, self.store, self.alias = bar, cfg, store, alias
+        self.bar_utc = utc(bar.start)
+        self.window = int(cfg.match_window_ms * 1_000_000)
+        self.refill_window = int(cfg.refill_window_ms * 1_000_000)
+        self.groups, self.refills = defaultdict(deque), defaultdict(deque)
+        self.pending = deque()
+        self.boundary_qty = 0
+        self.finished = False
+
+    def trade(self, t):
+        self.groups[(t['side'], t['price'], t['passive_id'])].append(
+            {'ts': t['ts'], 'remaining': t['qty'], 'seq': t['seq']})
+        self.refills[(t['side'], t['price'])].append(
+            {'ts': t['ts'], 'qty': t['qty'], 'oid': t['passive_id']})
+
+    def reduction(self, r):
+        self.pending.append(r)
+
+    def advance(self, ts):
+        while self.pending and self.pending[0]['ts'] + self.window < ts:
+            self._match(self.pending.popleft())
+
+    def _match(self, r):
+        level = self.bar.levels[(r['side'], r['price'])]
+        remaining, by_id, by_price = r['qty'], 0, 0
+        if not r['bootstrap'] and not r['moved']:
+            keys = [(r['side'], r['price'], r['oid'])]
+            if self.cfg.allow_price_time_matching:
+                keys.append((r['side'], r['price'], ''))
+            for index, key in enumerate(keys):
+                credits = self.groups.get(key)
+                if not credits:
+                    continue
+                while credits and credits[0]['ts'] < r['ts'] - self.window:
+                    credits.popleft()
+                for credit in credits:
+                    if credit['ts'] > r['ts'] + self.window or remaining <= 0:
+                        break
+                    matched = min(remaining, credit['remaining'])
+                    credit['remaining'] -= matched
+                    remaining -= matched
+                    if index == 0:
+                        by_id += matched
+                    else:
+                        by_price += matched
+                while credits and credits[0]['remaining'] <= 0:
+                    credits.popleft()
+                if not credits:
+                    self.groups.pop(key, None)
+            level['exec_id'] += by_id
+            level['exec_price'] += by_price
+            level['withdrawal_est'] += remaining
+            if r['near']:
+                level['near_withdrawal_est'] += remaining
+            if r['ts'] - self.bar.start < self.window or self.bar.end - r['ts'] <= self.window:
+                self.boundary_qty += remaining
+        else:
+            remaining = 0
+        self.store.write('attribution', {
+            'alias': self.alias, 'bar_start_utc': self.bar_utc, 'event_utc': utc(r['ts']),
+            'ingest_seq': r['seq'], 'order_id_text': 'id:' + r['oid'], 'side': r['side'],
+            'price_tick': r['price'], 'reduced_qty': r['qty'], 'id_correlated_execution_qty': by_id,
+            'price_time_correlated_execution_qty': by_price, 'unexplained_withdrawal_est_qty': remaining,
+            'known_reprice_out_qty': r['qty'] if r['moved'] else 0,
+            'bootstrap': r['bootstrap'], 'near_touch': r['near'],
+            'observed_order_age_ms': r['age_ms'], 'age_is_lower_bound': r['age_lower_bound'],
+            'match_policy': 'same_bar_id_side_price_time_quantity; optional missing_id_price_time',
+        }, self.bar.start)
+
+    def add(self, a):
+        if a['bootstrap'] or a['moved']:
+            return
+        cs = self.refills.get((a['side'], a['price']))
+        if not cs:
+            return
+        while cs and cs[0]['ts'] < a['ts'] - self.refill_window:
+            cs.popleft()
+        left, refill, same = a['qty'], 0, 0
+        while cs and left:
+            credit = cs[0]
+            q = min(left, credit['qty'])
+            left -= q
+            credit['qty'] -= q
+            refill += q
+            if credit['oid'] and credit['oid'] == a['oid']:
+                same += q
+            if credit['qty'] <= 0:
+                cs.popleft()
+        if not cs:
+            self.refills.pop((a['side'], a['price']), None)
+        level = self.bar.levels[(a['side'], a['price'])]
+        level['refill'] += refill
+        level['same_id_refill'] += same
+        if refill:
+            self.store.write('replenishment', {
+                'alias': self.alias, 'bar_start_utc': self.bar_utc, 'event_utc': utc(a['ts']),
+                'ingest_seq': a['seq'], 'order_id_text': 'id:' + a['oid'], 'side': a['side'],
+                'price_tick': a['price'], 'added_qty': a['qty'], 'execution_following_refill_qty': refill,
+                'same_id_refill_qty': same, 'window_ms': self.cfg.refill_window_ms,
+                'interpretation': 'displayed replenishment evidence; not participant or iceberg identification',
+            }, self.bar.start)
+
+    def finish(self):
+        if not self.finished:
+            while self.pending:
+                self._match(self.pending.popleft())
+            self.finished = True
+            self.groups.clear()
+            self.refills.clear()
+        return self.boundary_qty
+
+
+class BatchTracker:
+    """Accumulate completed execution batches on arrival, preserving zero fences."""
+    def __init__(self, bar, store, alias):
+        self.bar, self.store, self.alias = bar, store, alias
+        self.bar_utc = utc(bar.start)
+        self.result = {'buy_sweep_count': 0, 'sell_sweep_count': 0,
+                       'buy_max_batch_qty': 0, 'sell_max_batch_qty': 0, 'incomplete_batches': 0}
+        self.active = None
+        self.finished = False
+
+    def trade(self, t):
+        a = self.active
+        segment = t.get('batch_segment', 0)
+        if a and segment != a['batch_segment']:
+            self.result['incomplete_batches'] += 1
+            a = None
+        if t['start']:
+            if a:
+                self.result['incomplete_batches'] += 1
+            a = {'start': t['ts'], 'is_buy': t['is_buy'], 'low': t['price'], 'high': t['price'],
+                 'qty': 0, 'prints': 0, 'aggressor_id': t['aggressor_id'], 'batch_segment': segment}
+        if a:
+            if t['is_buy'] != a['is_buy']:
+                self.result['incomplete_batches'] += 1
+                self.active = None
+                return
+            a['qty'] += t['qty']
+            a['prints'] += 1
+            a['low'], a['high'] = min(a['low'], t['price']), max(a['high'], t['price'])
+            if t['end']:
+                label = 'buy' if a['is_buy'] else 'sell'
+                span = a['high'] - a['low']
+                self.result[label + '_sweep_count'] += int(span >= 1 and a['prints'] >= 2)
+                self.result[label + '_max_batch_qty'] = max(self.result[label + '_max_batch_qty'], a['qty'])
+                self.store.write('execution_batches', {
+                    'alias': self.alias, 'bar_start_utc': self.bar_utc, 'start_utc': utc(a['start']),
+                    'end_utc': utc(t['ts']), 'aggressor': label, 'aggressor_id_text': 'id:' + a['aggressor_id'],
+                    'quantity': a['qty'], 'prints': a['prints'], 'price_span_ticks': span,
+                    'complete_flagged_batch': True,
+                }, self.bar.start)
+                a = None
+        self.active = a
+
+    def finish(self):
+        if not self.finished:
+            if self.active:
+                self.result['incomplete_batches'] += 1
+                self.active = None
+            self.finished = True
+        return dict(self.result)
 
 
 def measure_bar(bar, book, cfg, store, alias, tick_size, timestamp_basis):
@@ -751,7 +1119,11 @@ def measure_bar(bar, book, cfg, store, alias, tick_size, timestamp_basis):
         "price_path_ticks": path, "path_efficiency": ratio(abs(net), path),
         "buy_progress_ticks": max(net, 0), "sell_progress_ticks": max(-net, 0),
         "buy_impact": ratio(100.0 * max(net, 0), buy), "sell_impact": ratio(100.0 * max(-net, 0), sell),
-        "quote_coverage": coverage, "crossed_or_locked_fraction": bar.quote["crossed_ns"] / MINUTE,
+        "quote_coverage": coverage, "min_quote_coverage_required": cfg.min_quote_coverage,
+        "empty_book_fraction": bar.quote["empty_ns"] / MINUTE,
+        "unobserved_quote_fraction": max(0, MINUTE - valid_ns - bar.quote["empty_ns"]
+                                        - bar.quote["crossed_ns"] - bar.quote["stale_ns"]) / MINUTE,
+        "crossed_or_locked_fraction": bar.quote["crossed_ns"] / MINUTE,
         "stale_quote_fraction": bar.quote["stale_ns"] / MINUTE,
         "spread_twa": ratio(bar.quote["spread_ns"], valid_ns), "spread_max_ticks": bar.quote["max_spread"],
         "wide_spread_fraction": bar.quote["wide_spread_ns"] / MINUTE,
@@ -1122,7 +1494,7 @@ class OutcomeTracker:
 
 class Engine:
     def __init__(self, alias, start_ns, cfg=None, store=None, emit=None, tick_size=0.25,
-                 timestamp_basis="LOCAL_ARRIVAL", now_ns=None, safety_check=None, metadata=None):
+                 timestamp_basis="LOCAL_ARRIVAL", now_ns=None, safety_check=None, metadata=None, diagnostics=None):
         self.cfg = (cfg or Config()).validate()
         if not math.isclose(tick_size, 0.25, abs_tol=1e-12):
             raise ValueError("This build is for outright ES with 0.25-point ticks")
@@ -1130,6 +1502,8 @@ class Engine:
         self.metadata = dict(metadata or {})
         self.store, self.emit = store or MemoryStore(), emit
         self.now_ns, self.safety_check = now_ns, safety_check
+        self.runtime_diagnostics = diagnostics
+        self.last_metrics = None
         self.book, self.benchmarks = OrderBook(), Benchmarks(self.cfg)
         self.fsm = StateMachine(self.cfg)
         self.outcomes = OutcomeTracker(self.cfg, self.store, alias)
@@ -1152,8 +1526,11 @@ class Engine:
 
     def _new_bar(self, start, partial=False):
         upper, lower = self.fsm.references(self.benchmarks.history)
-        return Bar(start, self.book.snapshot(), self.previous_close, upper, lower,
-                   partial=partial, bootstrap=start < self.bootstrap_until)
+        bar = Bar(start, self.book.snapshot(), self.previous_close, upper, lower,
+                  partial=partial, bootstrap=start < self.bootstrap_until)
+        bar.flow_tracker = FlowTracker(bar, self.cfg, self.store, self.alias)
+        bar.batch_tracker = BatchTracker(bar, self.store, self.alias)
+        return bar
 
     def _publish(self, decision, available, signal_id):
         display = decision.display(self.tick_size)
@@ -1184,15 +1561,69 @@ class Engine:
             "zero_size_trade_policy": self.cfg.zero_size_trade_policy,
         }
 
+    def diagnostics(self, now):
+        bid, ask = self.book.best("bid"), self.book.best("ask")
+        elapsed = max(1, min(MINUTE, self.last_ns - self.bar.start))
+        status = ("EMPTY" if bid is None or ask is None else
+                  "CROSSED_OR_LOCKED" if bid >= ask else "OK")
+        last = self.last_metrics or {}
+        runtime = self.runtime_diagnostics() if self.runtime_diagnostics else {}
+        row = {
+            "alias": self.alias, "utc": utc(now), "engine_version": VERSION,
+            "book_status": status, "best_bid_tick": bid, "best_ask_tick": ask,
+            "book_orders": len(self.book.orders), "bar_start_utc": utc(self.bar.start),
+            "partial_quote_coverage": self.bar.quote["valid_ns"] / elapsed,
+            "partial_empty_fraction": self.bar.quote["empty_ns"] / elapsed,
+            "partial_crossed_fraction": self.bar.quote["crossed_ns"] / elapsed,
+            "partial_stale_fraction": self.bar.quote["stale_ns"] / elapsed,
+            "min_quote_coverage_required": self.cfg.min_quote_coverage,
+            "last_completed_bar_end_utc": last.get("bar_end_utc", ""),
+            "last_completed_quote_coverage": last.get("quote_coverage"),
+            "last_completed_quality_flags": last.get("quality_flags", ""),
+            "last_completed_empty_fraction": last.get("empty_book_fraction"),
+            "last_completed_crossed_fraction": last.get("crossed_or_locked_fraction"),
+            "last_completed_stale_fraction": last.get("stale_quote_fraction"),
+            "last_completed_data_valid": last.get("data_valid"),
+            "mbo_age_ms": (now - self.last_mbo_ns) / 1e6 if self.last_mbo_ns is not None else None,
+            "bar_max_processing_lag_ms": self.bar.max_lag_ms,
+            "processed_mbo_this_bar": self.bar.counts["mbo"],
+            "positive_trades_this_bar": len(self.bar.trades),
+            "zero_size_callbacks_this_bar": self.bar.counts["zero_size_trade"],
+            "input_queue_depth": runtime.get("input_queue_depth", 0),
+            "input_queue_capacity": self.cfg.event_queue_capacity,
+            "input_queue_highwater": runtime.get("input_queue_highwater", 0),
+            "input_queue_oldest_age_ms": runtime.get("input_queue_oldest_age_ms", 0.0),
+            "last_processing_lag_ms": runtime.get("last_processing_lag_ms", 0.0),
+            "max_allowed_processing_lag_ms": self.cfg.max_processing_lag_ms,
+            "input_events_per_second": runtime.get("input_events_per_second", 0.0),
+            "received_events": runtime.get("received_events", self.last_seq),
+            "processed_events": self.last_seq,
+            "dropped_events": runtime.get("dropped_events", 0),
+            "csv_async": runtime.get("csv_async", False),
+            "csv_queue_rows": runtime.get("csv_queue_rows", 0),
+            "csv_queue_capacity": self.cfg.csv_queue_capacity,
+            "csv_queue_highwater": runtime.get("csv_queue_highwater", 0),
+            "csv_rows_written": runtime.get("csv_rows_written", 0),
+            "csv_writer_error": runtime.get("csv_writer_error", ""),
+            "fault": self.fault_reason,
+        }
+        return row
+
     def heartbeat(self, now):
         if now - self.last_heartbeat_ns < SECOND:
             return
         self.last_heartbeat_ns = now
         stale = self.last_mbo_ns is None or now - self.last_mbo_ns > self.cfg.stale_quote_seconds * SECOND
+        diagnostic = self.diagnostics(now)
         self.store.heartbeat({"updated_utc": utc(now), "updated_ns_text": "ns:" + str(now),
             "last_callback_utc": utc(self.last_ns), "last_mbo_utc": utc(self.last_mbo_ns) if self.last_mbo_ns else "",
             "fault": self.fault_reason, "stale_mbo": stale, "closed": self.closed,
-            "bootstrap_until_ns_text": "ns:" + str(self.bootstrap_until), **self._trade_health()})
+            "bootstrap_until_ns_text": "ns:" + str(self.bootstrap_until),
+            **self._trade_health(), "diagnostics": diagnostic})
+        if self.store.path is not None:
+            # Compact support bundle, not a full multi-GB event capture.
+            self.store._atomic("diagnostics.json", diagnostic)
+        self.store.write("diagnostics", diagnostic, now)
         if stale and not self.health_guarded and now >= self.bootstrap_until:
             self.health_guarded = True
             self._publish(Decision("DATA_QUALITY", 0, "STAND ASIDE", "MBO stale or absent; wait for fresh data and a valid completed candle"), now, "")
@@ -1203,6 +1634,7 @@ class Engine:
             return
         bid, ask = self.book.best("bid"), self.book.best("ask")
         if bid is None or ask is None:
+            self.bar.quote["empty_ns"] += end - begin
             return
         if bid >= ask:
             self.bar.quote["crossed_ns"] += end - begin
@@ -1254,6 +1686,15 @@ class Engine:
         m["decision_available_utc"], m["decision_latency_ms"] = utc(available), delay_ms
         b = self.benchmarks.compute(m)  # Deliberately BEFORE append(m).
         d = self.fsm.decide(m, b)
+        self.last_metrics = m
+        if not m["data_valid"]:
+            d.reason += "; quotes %.1f%%/%.1f%%; empty %.1f%%, crossed %.1f%%, stale %.1f%%; lag %.0fms" % (
+                100 * m["quote_coverage"], 100 * self.cfg.min_quote_coverage,
+                100 * m["empty_book_fraction"], 100 * m["crossed_or_locked_fraction"],
+                100 * m["stale_quote_fraction"], m["max_processing_lag_ms"])
+            self.store.write("quality", {"alias": self.alias, "utc": utc(bar.end),
+                "code": "INVALID_CANDLE", "detail": d.reason,
+                "sticky": False, "action": "Inspect diagnostics.json and diagnostics.csv; do not lower coverage to mask missing/crossed quotes"}, bar.start)
         if m["zero_size_trade_count"]:
             n = m["zero_size_trade_count"]
             d.reason += "; %d zero-size callbacks skipped" % n
@@ -1295,6 +1736,10 @@ class Engine:
             self.last_ns = stop
             if stop == self.bar.end:
                 self._finalize(event)
+                # Break tracker->bar cycles promptly; otherwise large completed
+                # candles survive until cyclic GC and create avoidable pauses.
+                self.bar.flow_tracker = None
+                self.bar.batch_tracker = None
                 self.bar = self._new_bar(stop)
         self.last_ns = target
 
@@ -1322,6 +1767,7 @@ class Engine:
             bar.reductions.append({"ts": e.ts_ns, "seq": e.seq, "oid": oid, "side": old.side,
                 "price": old.price, "qty": reduced, "near": near_old, "moved": moved, "bootstrap": boot,
                 "age_ms": (e.ts_ns - old.born_ns) / 1_000_000, "age_lower_bound": old.born_in_bootstrap})
+            bar.flow_tracker.reduction(bar.reductions[-1])
         if added:
             near_new = self.book.is_near(new.side, new.price, self.cfg.near_ticks)
             level = bar.levels[(new.side, new.price)]
@@ -1331,6 +1777,7 @@ class Engine:
                 level["reprice_in"] += added if moved else 0
             bar.adds.append({"ts": e.ts_ns, "seq": e.seq, "oid": oid, "side": new.side,
                 "price": new.price, "qty": added, "near": near_new, "moved": moved, "bootstrap": boot})
+            bar.flow_tracker.add(bar.adds[-1])
         return {"order_id": oid, "event_type": etype, "side": new.side if new else old.side,
                 "price": price, "qty": qty, "old_price": old.price if old else None,
                 "old_qty": old.qty if old else None, "new_price": new.price if new else None,
@@ -1405,6 +1852,8 @@ class Engine:
              "passive_id": clean_id(d.get("passive_id")), "aggressor_id": clean_id(d.get("aggressor_id")),
              "start": start, "end": end, "batch_segment": bar.counts["zero_size_trade"]}
         bar.trades.append(t)
+        bar.flow_tracker.trade(t)
+        bar.batch_tracker.trade(t)
         self.positive_trade_count_total += 1
         self.last_positive_trade_ns = e.ts_ns
         if bar.open_tick is None:
@@ -1431,7 +1880,12 @@ class Engine:
             "new_price_tick": observed.get("new_price"), "new_quantity": observed.get("new_qty"),
             "best_bid_before": observed.get("pre_bid"), "best_ask_before": observed.get("pre_ask"),
             "best_bid_after": self.book.best("bid"), "best_ask_after": self.book.best("ask"),
-            "normalized_event_json": asdict(event),
+            # No recursive dataclass deepcopy for each market-data message.
+            # The worker owns this event; its audit snapshot is immutable after
+            # this call (including recorded decision-availability timestamps).
+            "normalized_event_json": {"ts_ns": event.ts_ns, "seq": event.seq,
+                "kind": event.kind, "data": dict(event.data),
+                "processing_lag_ms": event.processing_lag_ms},
         }, event.ts_ns)
 
     def process(self, event):
@@ -1447,9 +1901,9 @@ class Engine:
             self.last_seq = event.seq
             return
         self.last_seq = event.seq
-        self.bar.max_lag_ms = max(self.bar.max_lag_ms, event.processing_lag_ms)
         self._advance(event)  # Event at exact minute boundary belongs to the NEW candle.
         self.bar.max_lag_ms = max(self.bar.max_lag_ms, event.processing_lag_ms)
+        self.bar.flow_tracker.advance(event.ts_ns)
         observed = {}
         rejected = False
         if not self.fault_reason:
@@ -1553,6 +2007,13 @@ def read_panel_display(folder, static=False, exact=False, now_ns=None):
         return panel_safe_display("Engine stopped; fresh snapshot required on restart", "STOPPED"), filename
     if health.get("fault"):
         return panel_safe_display(str(health["fault"])), filename
+    diagnostic = health.get("diagnostics", {})
+    if diagnostic.get("csv_writer_error") or diagnostic.get("dropped_events", 0):
+        return panel_safe_display("Capture/audit integrity fault; inspect diagnostics.json and restart"), filename
+    lag_limit = diagnostic.get("max_allowed_processing_lag_ms", 1000.0)
+    if diagnostic.get("input_queue_oldest_age_ms", 0) > lag_limit:
+        return panel_safe_display("Processing backlog: %.0fms, %d queued; no live action" % (
+            diagnostic["input_queue_oldest_age_ms"], diagnostic.get("input_queue_depth", 0))), filename
     now = time.time_ns() if now_ns is None else now_ns
     health_age = now - _panel_ns(health["updated_ns_text"])
     decision_age = now - _panel_ns(latest["updated_ns_text"])
@@ -1568,6 +2029,12 @@ def read_panel_display(folder, static=False, exact=False, now_ns=None):
                     and now < _panel_ns(health.get("bootstrap_until_ns_text", "ns:0")))
     if health.get("stale_mbo") and not initial_wait:
         return panel_safe_display("MBO feed stale or absent; no live action"), filename
+    if diagnostic and display["STATE"] in ("WARMUP", "DATA_QUALITY"):
+        display = dict(display)
+        display["REASON"] += " | now: book %s, lag %.0fms, inQ %d, csvQ %d" % (
+            diagnostic.get("book_status", "UNKNOWN"),
+            diagnostic.get("input_queue_oldest_age_ms", 0),
+            diagnostic.get("input_queue_depth", 0), diagnostic.get("csv_queue_rows", 0))
     return display, filename
 
 
@@ -1800,13 +2267,16 @@ def run_floating_panel(folder, static=False, exact=False, owner_stdin=False,
 
 
 class LiveRuntime:
-    """Callbacks only timestamp and enqueue. One worker owns book and files."""
+    """Callbacks timestamp/enqueue; one engine worker and a bounded CSV writer."""
     def __init__(self, alias, cfg, output, metadata):
         self.alias, self.cfg, self.output, self.metadata = alias, cfg, output, metadata
         self.start_ns = time.time_ns()
         self.queue = queue.Queue(maxsize=cfg.event_queue_capacity)
         self.lock = threading.Lock()
         self.seq, self.dropped = 0, 0
+        self.queue_highwater, self.last_lag_ms = 0, 0.0
+        self.store = None
+        self.rate_sample_ns, self.rate_sample_seq = time.monotonic_ns(), 0
         self.emergency, self.engine, self.stopping = "", None, False
         self.run_path = None
         self.panel = FloatingPanelProcess(alias, cfg)
@@ -1824,17 +2294,42 @@ class LiveRuntime:
             e = Event(time.time_ns(), self.seq, kind, data or {})
             try:
                 self.queue.put_nowait(e)
+                self.queue_highwater = max(self.queue_highwater, self.queue.qsize())
             except queue.Full:
                 self.dropped += 1
                 self.emergency = "INPUT_QUEUE_OVERFLOW; events lost; disable/re-enable for snapshot"
 
+    def diagnostics(self):
+        now = time.time_ns()
+        with self.queue.mutex:
+            depth = len(self.queue.queue)
+            oldest = self.queue.queue[0].ts_ns if depth else now
+        monotonic = time.monotonic_ns()
+        seconds = (monotonic - self.rate_sample_ns) / SECOND
+        rate = (self.seq - self.rate_sample_seq) / seconds if seconds > 0 else 0.0
+        self.rate_sample_ns, self.rate_sample_seq = monotonic, self.seq
+        row = {"input_events_per_second": rate,
+               "input_queue_depth": depth, "input_queue_highwater": self.queue_highwater,
+               "input_queue_oldest_age_ms": max(0.0, (now - oldest) / 1e6),
+               "last_processing_lag_ms": self.last_lag_ms,
+               "received_events": self.seq, "dropped_events": self.dropped}
+        if isinstance(self.store, AsyncCsvStore):
+            row.update(self.store.diagnostics())
+        return row
+
+    def safety(self):
+        return self.emergency or (self.store._writer_error if isinstance(self.store, AsyncCsvStore) else "")
+
     def _run(self):
         store = None
         try:
-            store = CsvStore(self.output, self.alias, self.cfg, self.metadata)
+            store_type = AsyncCsvStore if self.cfg.async_csv_logging else CsvStore
+            store = store_type(self.output, self.alias, self.cfg, self.metadata)
+            self.store = store
             self.run_path = store.path
             self.engine = Engine(self.alias, self.start_ns, self.cfg, store, print_display,
-                now_ns=time.time_ns, safety_check=lambda: self.emergency, metadata=self.metadata)
+                now_ns=time.time_ns, safety_check=self.safety, metadata=self.metadata,
+                diagnostics=self.diagnostics)
             self.engine.heartbeat(time.time_ns())
             self.panel.start(store.path)
             while not self.stopping or not self.queue.empty():
@@ -1848,8 +2343,13 @@ class LiveRuntime:
                 if self.emergency:
                     e.data["_adapter_fault"] = self.emergency
                 e.processing_lag_ms = max(0.0, (time.time_ns() - e.ts_ns) / 1_000_000)
+                self.last_lag_ms = e.processing_lag_ms
                 self.engine.process(e)
                 self.queue.task_done()
+                # Health is clocked independently of delayed PULSE callbacks.
+                # This does not advance candles using worker time.
+                if time.time_ns() - self.engine.last_heartbeat_ns >= SECOND:
+                    self.engine.heartbeat(time.time_ns())
             self.seq += 1
             self.engine.process(Event(time.time_ns(), self.seq, "STOP"))
         except Exception as exc:
